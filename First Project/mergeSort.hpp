@@ -1,43 +1,43 @@
- #pragma once
-#include "Arraylist.hpp" 
+#pragma once
+#include <cstddef>   
 #include <functional>
+#include <algorithm> 
 
-template <typename E, typename C>
-void merge(Arraylist<E>& S1, Arraylist<E>& S2, Arraylist<E>& S, const C& less) {
-    std::size_t i = 0, j = 0;
-    Arraylist<E> temp;
+template <typename E, typename Compare>
+void merge(E* arr, std::size_t left, std::size_t mid, std::size_t right, const Compare& less) {
+    std::size_t n1 = mid - left + 1;
+    std::size_t n2 = right - mid;
 
-    while (i < S1.getSize() && j < S2.getSize()) {
-        if (less(S1[i], S2[j])) {
-            temp.addBack(S1[i++]);
+    E* L = new E[n1];
+    E* R = new E[n2];
+
+    for (std::size_t i = 0; i < n1; ++i) L[i] = arr[left + i];
+    for (std::size_t j = 0; j < n2; ++j) R[j] = arr[mid + 1 + j];
+
+    std::size_t i = 0, j = 0, k = left;
+
+    while (i < n1 && j < n2) {
+        if (less(L[i], R[j])) {
+            arr[k++] = L[i++];
         }
         else {
-            temp.addBack(S2[j++]);
+            arr[k++] = R[j++];
         }
     }
 
-    while (i < S1.getSize()) temp.addBack(S1[i++]);
-    while (j < S2.getSize()) temp.addBack(S2[j++]);
+    while (i < n1) arr[k++] = L[i++];
+    while (j < n2) arr[k++] = R[j++];
 
-    S = temp; 
+    delete[] L;
+    delete[] R;
 }
 
-template <typename E, typename C>
-void mergeSort(Arraylist<E>& S, const C& less) {
-    std::size_t n = S.getSize();
-    if (n <= 1) return;
+template <typename E, typename Compare>
+void mergeSort(E* arr, std::size_t left, std::size_t right, const Compare& less) {
+    if (left >= right) return;
 
-    Arraylist<E> S1, S2;
-
-    for (std::size_t i = 0; i < n / 2; ++i) {
-        S1.addBack(S[i]);
-    }
-
-    for (std::size_t i = n / 2; i < n; ++i) {
-        S2.addBack(S[i]);
-    }
-
-    mergeSort(S1, less);
-    mergeSort(S2, less);
-    merge(S1, S2, S, less);
+    std::size_t mid = left + (right - left) / 2;
+    mergeSort(arr, left, mid, less);
+    mergeSort(arr, mid + 1, right, less);
+    merge(arr, left, mid, right, less);
 }
