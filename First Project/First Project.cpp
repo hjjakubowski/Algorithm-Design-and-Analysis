@@ -2,11 +2,10 @@
 #include <chrono>
 #include <random>
 #include <iomanip>
-#include <cstring> // dla memcpy
+#include <cstring> 
 #include <string>
 #include "mergeSort.hpp"
 
-// =================== Generowanie tablic ========================
 
 int* generateRandomArray(int arraySize, int seed) {
     std::mt19937 generator(seed);
@@ -18,6 +17,38 @@ int* generateRandomArray(int arraySize, int seed) {
     return arr;
 }
 
+int* generatePartiallySortedArray(int arraySize, double percentage, int seed) {
+    std::mt19937 generator(seed);
+    int* arr = new (std::nothrow) int[arraySize];
+    if (!arr) throw std::bad_alloc();
+
+   
+    int numSorted = static_cast<int>(arraySize * percentage);
+
+    
+    for (int i = 0; i < numSorted; ++i) {
+        arr[i] = i + 1;
+    }
+
+   
+    for (int i = numSorted; i < arraySize; ++i) {
+        arr[i] = numSorted + 1 + (generator() % (arraySize - numSorted));
+    }
+
+    return arr;
+}
+
+int* generateReverseSortedArray(int arraySize) {
+    int* arr = new (std::nothrow) int[arraySize];
+    if (!arr) throw std::bad_alloc();
+
+    for (int i = 0; i < arraySize; ++i) {
+        arr[i] = arraySize - i;
+    }
+
+    return arr;
+}
+
 int* copyArray(const int* original, int arraySize) {
     int* copy = new (std::nothrow) int[arraySize];
     if (!copy) throw std::bad_alloc();
@@ -25,35 +56,7 @@ int* copyArray(const int* original, int arraySize) {
     return copy;
 }
 
-void partialSort(int* arr, int arraySize, double percentage) {
-    int n = static_cast<int>(arraySize * percentage);
-    for (int i = 1; i < n; ++i) {
-        int key = arr[i];
-        int j = i - 1;
-        while (j >= 0 && arr[j] > key) {
-            arr[j + 1] = arr[j];
-            --j;
-        }
-        arr[j + 1] = key;
-    }
-}
 
-void fullReverseSort(int* arr, int arraySize) {
-    for (int i = 1; i < arraySize; ++i) {
-        int key = arr[i];
-        int j = i - 1;
-        while (j >= 0 && arr[j] > key) {
-            arr[j + 1] = arr[j];
-            --j;
-        }
-        arr[j + 1] = key;
-    }
-    for (int i = 0; i < arraySize / 2; ++i) {
-        int temp = arr[i];
-        arr[i] = arr[arraySize - 1 - i];
-        arr[arraySize - 1 - i] = temp;
-    }
-}
 
 // ======================= Pomiar i sortowanie ========================
 
@@ -69,8 +72,7 @@ double runExperimentAverage(int* baseArrays[], int arraySize, ModifierFunc&& mod
 
             auto start = std::chrono::high_resolution_clock::now();
 
-            mergeSort<int>(arr, 0, arraySize - 1, [](int a, int b) { return a < b; });
-
+            mergeSort<int>(arr, arraySize, [](int a, int b) { return a < b; });
             auto end = std::chrono::high_resolution_clock::now();
             std::chrono::duration<double, std::milli> duration = end - start;
             totalTime += duration.count();
@@ -85,7 +87,7 @@ double runExperimentAverage(int* baseArrays[], int arraySize, ModifierFunc&& mod
     return totalTime / 10.0;
 }
 
-// ============================ Main ==============================
+
 
 int main() {
     try {
@@ -99,32 +101,39 @@ int main() {
             int arraySize = arraySizes[s];
             std::cout << "===== Rozmiar tablicy: " << arraySize << " =====\n";
 
-            // Generuj bazowe tablice
+            
             int* baseArrays[repeatCount];
             for (int i = 0; i < repeatCount; ++i)
                 baseArrays[i] = generateRandomArray(arraySize, i);
 
-            // Losowe (bez modyfikacji)
+           
             double avgRandom = runExperimentAverage(baseArrays, arraySize, [](int*) {});
             std::cout << "Losowe:           " << std::fixed << std::setprecision(2) << avgRandom << " ms\n";
 
-            // Częściowo posortowane
+            
             for (int p = 0; p < numPercents; ++p) {
                 double percent = percentages[p];
-                double avg = runExperimentAverage(baseArrays, arraySize, [percent, arraySize](int* arr) {
-                    partialSort(arr, arraySize, percent);
-                    });
+
+                
+                for (int i = 0; i < repeatCount; ++i) {
+                    delete[] baseArrays[i];
+                    baseArrays[i] = generatePartiallySortedArray(arraySize, percent, i);
+                }
+
+                double avg = runExperimentAverage(baseArrays, arraySize, [](int*) {});
                 std::cout << "Sort " << std::setw(4) << int(percent * 100) << "%:        "
                     << std::fixed << std::setprecision(2) << avg << " ms\n";
             }
 
-            // Odwrotne
-            double avgReverse = runExperimentAverage(baseArrays, arraySize, [arraySize](int* arr) {
-                fullReverseSort(arr, arraySize);
-                });
+            
+            for (int i = 0; i < repeatCount; ++i) {
+                delete[] baseArrays[i];
+                baseArrays[i] = generateReverseSortedArray(arraySize);
+            }
+            double avgReverse = runExperimentAverage(baseArrays, arraySize, [](int*) {});
             std::cout << "Odwrotne:         " << std::fixed << std::setprecision(2) << avgReverse << " ms\n\n";
 
-            // Zwolnij bazowe tablice
+          
             for (int i = 0; i < repeatCount; ++i)
                 delete[] baseArrays[i];
         }

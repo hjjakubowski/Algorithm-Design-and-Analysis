@@ -1,43 +1,61 @@
 #pragma once
-#include <cstddef>   
+#include <cstddef>
 #include <functional>
 #include <algorithm> 
+#include <stdexcept> 
+
 
 template <typename E, typename Compare>
-void merge(E* arr, std::size_t left, std::size_t mid, std::size_t right, const Compare& less) {
-    std::size_t n1 = mid - left + 1;
-    std::size_t n2 = right - mid;
+void merge(E* arr, E* buffer, std::size_t left, std::size_t mid, std::size_t right, const Compare& less) {
+  
+    std::copy(arr + left, arr + right + 1, buffer + left);
+    
+    std::size_t i = left;       
+    std::size_t j = mid + 1;    
+    std::size_t k = left;       
 
-    E* L = new E[n1];
-    E* R = new E[n2];
-
-    for (std::size_t i = 0; i < n1; ++i) L[i] = arr[left + i];
-    for (std::size_t j = 0; j < n2; ++j) R[j] = arr[mid + 1 + j];
-
-    std::size_t i = 0, j = 0, k = left;
-
-    while (i < n1 && j < n2) {
-        if (less(L[i], R[j])) {
-            arr[k++] = L[i++];
+    while (i <= mid && j <= right) {
+        if (less(buffer[i], buffer[j])) {
+            arr[k++] = buffer[i++];
         }
         else {
-            arr[k++] = R[j++];
+            arr[k++] = buffer[j++];
         }
     }
 
-    while (i < n1) arr[k++] = L[i++];
-    while (j < n2) arr[k++] = R[j++];
+    while (i <= mid) {
+        arr[k++] = buffer[i++];
+    }
 
-    delete[] L;
-    delete[] R;
+   
 }
 
 template <typename E, typename Compare>
-void mergeSort(E* arr, std::size_t left, std::size_t right, const Compare& less) {
+void mergeSort_recursive(E* arr, E* buffer, std::size_t left, std::size_t right, const Compare& less) {
     if (left >= right) return;
 
     std::size_t mid = left + (right - left) / 2;
-    mergeSort(arr, left, mid, less);
-    mergeSort(arr, mid + 1, right, less);
-    merge(arr, left, mid, right, less);
+    mergeSort_recursive(arr, buffer, left, mid, less);
+    mergeSort_recursive(arr, buffer, mid + 1, right, less);
+    merge(arr, buffer, left, mid, right, less);
+}
+
+template <typename E, typename Compare = std::less<E>> 
+void mergeSort(E* arr, std::size_t size, const Compare& less = Compare{}) {
+    if (size < 2) return; 
+
+    E* buffer = new (std::nothrow) E[size];
+    if (!buffer) {
+        throw std::bad_alloc(); 
+    }
+
+    try {
+        mergeSort_recursive(arr, buffer, 0, size - 1, less);
+    }
+    catch (...) {
+        delete[] buffer; 
+        throw;           
+    }
+
+    delete[] buffer; 
 }
