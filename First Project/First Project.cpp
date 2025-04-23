@@ -87,6 +87,13 @@ double runExperimentAverage(int* baseArrays[], int arraySize, ModifierFunc&& mod
     return totalTime / 10.0;
 }
 
+void printArray(const int* arr, int arraySize, const std::string& description) {
+    std::cout << description << ": ";
+    for (int i = 0; i < std::min(100, arraySize); ++i) {
+        std::cout << arr[i] << " ";
+    }
+    std::cout << "\n";
+}
 
 
 int main() {
@@ -96,6 +103,7 @@ int main() {
         constexpr int numSizes = sizeof(arraySizes) / sizeof(arraySizes[0]);
         constexpr int numPercents = sizeof(percentages) / sizeof(percentages[0]);
         constexpr int repeatCount = 10;
+	    
 
         for (int s = 0; s < numSizes; ++s) {
             int arraySize = arraySizes[s];
@@ -106,11 +114,23 @@ int main() {
             for (int i = 0; i < repeatCount; ++i)
                 baseArrays[i] = generateRandomArray(arraySize, i);
 
-           
-            double avgRandom = runExperimentAverage(baseArrays, arraySize, [](int*) {});
-            std::cout << "Losowe:           " << std::fixed << std::setprecision(2) << avgRandom << " ms\n";
-
+			// Wyświetlanie pierwszych 100 elementów tablicy przed sortowaniem
+            //printArray(baseArrays[0], arraySize, "Przed posorotwaniem: ");
             
+
+            double avgRandom = runExperimentAverage(baseArrays, arraySize, [](int*) {});
+            //std::cout << "Losowe:           " << std::fixed << std::setprecision(2) << avgRandom << " ms\n";
+            std::cout << std::fixed << std::setprecision(2) << avgRandom << "\n";
+			
+           /*
+            //Wyświetlanie pierwszych 100 elementów posortowanych tablic
+            int* sortedArray = copyArray(baseArrays[0], arraySize);
+            mergeSort<int>(sortedArray, arraySize, [](int a, int b) { return a < b; });
+            printArray(sortedArray, arraySize, "Po sortowaniu: ");
+            delete[] sortedArray;
+           */
+            
+
             for (int p = 0; p < numPercents; ++p) {
                 double percent = percentages[p];
 
@@ -119,10 +139,22 @@ int main() {
                     delete[] baseArrays[i];
                     baseArrays[i] = generatePartiallySortedArray(arraySize, percent, i);
                 }
+                // Wyświetlanie pierwszych 100 elementów tablicy przed sortowaniem
+                //printArray(baseArrays[0], arraySize, "Losowe przed sortowaniem");
 
                 double avg = runExperimentAverage(baseArrays, arraySize, [](int*) {});
-                std::cout << "Sort " << std::setw(4) << int(percent * 100) << "%:        "
-                    << std::fixed << std::setprecision(2) << avg << " ms\n";
+                //std::cout << "Sort " << std::setw(4) << int(percent * 100) << "%:        "  << std::fixed << std::setprecision(2) << avg << " ms\n";
+                std::cout << std::fixed << std::setprecision(2) << avg << "\n";
+
+                
+                /*
+                //Wyświetlanie pierwszych 100 elementów posortowanych tablic
+                sortedArray = copyArray(baseArrays[0], arraySize);
+                mergeSort<int>(sortedArray, arraySize, [](int a, int b) { return a < b; });
+				printArray(sortedArray, arraySize, "Po sortowaniu (Sort): ");
+                delete[] sortedArray;
+                */
+                
             }
 
             
@@ -130,9 +162,25 @@ int main() {
                 delete[] baseArrays[i];
                 baseArrays[i] = generateReverseSortedArray(arraySize);
             }
-            double avgReverse = runExperimentAverage(baseArrays, arraySize, [](int*) {});
-            std::cout << "Odwrotne:         " << std::fixed << std::setprecision(2) << avgReverse << " ms\n\n";
 
+            // Wyświetlanie pierwszych 100 elementów tablicy przed sortowaniem
+            //printArray(baseArrays[0], arraySize, "Losowe przed sortowaniem");
+
+            double avgReverse = runExperimentAverage(baseArrays, arraySize, [](int*) {});
+            //std::cout << "Odwrotne:         " << std::fixed << std::setprecision(2) << avgReverse << " ms\n";
+            std::cout << std::fixed << std::setprecision(2) << avgReverse << "\n";
+
+            
+            /*
+            //Wyświetlanie pierwszych 10 elementów posortowanych tablic
+            sortedArray = copyArray(baseArrays[0], arraySize);
+            mergeSort<int>(sortedArray, arraySize, [](int a, int b) { return a < b; });
+			printArray(sortedArray, arraySize, "Po sortowaniu (Odwrotne): ");
+            std::cout << "\n";
+            delete[] sortedArray;
+            */
+            
+            
           
             for (int i = 0; i < repeatCount; ++i)
                 delete[] baseArrays[i];
