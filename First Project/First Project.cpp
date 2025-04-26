@@ -4,9 +4,9 @@
 #include <iomanip>
 #include <cstring> 
 #include <string>
-#include "mergeSort.hpp"
-#include "quicksort.hpp"
-
+#include "MergeSort.hpp"
+#include "QuickSort.hpp"
+#include "IntroSort.hpp"
 
 int* generateRandomArray(int arraySize, int seed) {
     std::mt19937 generator(seed);
@@ -65,7 +65,6 @@ void printArray(const int* arr, int arraySize, const std::string& description) {
     std::cout << "\n";
 }
 
-// ======================= Pomiar i sortowanie ========================
 
 template <typename ModifierFunc>
 double runMergeSortExperiment(int* baseArrays[], int arraySize, ModifierFunc&& modifyBeforeSort) {
@@ -121,6 +120,32 @@ double runQuickSortExperiment(int* baseArrays[], int arraySize, ModifierFunc&& m
     return totalTime / 10.0;
 }
 
+template <typename ModifierFunc>
+double runIntroSortExperiment(int* baseArrays[], int arraySize, ModifierFunc&& modifyBeforeSort) {
+    double totalTime = 0.0;
+
+    for (int i = 0; i < 10; ++i) {
+        int* arr = nullptr;
+        try {
+            arr = copyArray(baseArrays[i], arraySize);
+            modifyBeforeSort(arr);
+
+            auto start = std::chrono::high_resolution_clock::now();
+
+            introSort<int>(arr, arraySize, [](int a, int b) { return a < b; });
+            auto end = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double, std::milli> duration = end - start;
+            totalTime += duration.count();
+        }
+        catch (...) {
+            delete[] arr;
+            throw;
+        }
+        delete[] arr;
+    }
+
+    return totalTime / 10.0;
+}
 
 
 
@@ -133,7 +158,7 @@ int main() {
         constexpr int numPercents = sizeof(percentages) / sizeof(percentages[0]);
         constexpr int repeatCount = 10;
 	    
-
+        std::cout << "===== Merge Sort =====\n";
         for (int s = 0; s < numSizes; ++s) {
             int arraySize = arraySizes[s];
             std::cout << "===== Rozmiar tablicy: " << arraySize << " =====\n";
@@ -211,7 +236,9 @@ int main() {
             
             
             for (int i = 0; i < repeatCount; ++i) delete[] baseArrays[i];
-        }
+		}std::cout << "\n";
+
+        std::cout << "===== Quick Sort =====\n";
         // Testy dla quickSort
         for (int s = 0; s < numSizes; ++s) {
             int arraySize = arraySizes[s];
@@ -222,7 +249,8 @@ int main() {
                 baseArrays[i] = generateRandomArray(arraySize, i);
 
             double avgRandom = runQuickSortExperiment(baseArrays, arraySize, [](int*) {});
-            std::cout << "Losowe (quickSort):           " << std::fixed << std::setprecision(2) << avgRandom << " ms\n";
+            std::cout << "Losowe:           " << std::fixed << std::setprecision(2) << avgRandom << " ms\n";
+            //std::cout << std::fixed << std::setprecision(2) << avgRandom << "\n";
 
             for (int p = 0; p < numPercents; ++p) {
                 double percent = percentages[p];
@@ -233,8 +261,8 @@ int main() {
                 }
 
                 double avg = runQuickSortExperiment(baseArrays, arraySize, [](int*) {});
-                std::cout << "Sort " << std::setw(4) << int(percent * 100) << "% (quickSort):        "
-                    << std::fixed << std::setprecision(2) << avg << " ms\n";
+                std::cout << "Sort " << std::setw(4) << int(percent * 100) << "%:        "<< std::fixed << std::setprecision(2) << avg << " ms\n";
+                //std::cout << std::fixed << std::setprecision(2) << avg << "\n";
             }
 
             for (int i = 0; i < repeatCount; ++i) {
@@ -242,7 +270,47 @@ int main() {
                 baseArrays[i] = generateReverseSortedArray(arraySize);
             }
             double avgReverse = runQuickSortExperiment(baseArrays, arraySize, [](int*) {});
-            std::cout << "Odwrotne (quickSort):         " << std::fixed << std::setprecision(2) << avgReverse << " ms\n";
+            std::cout << "Odwrotne:         " << std::fixed << std::setprecision(2) << avgReverse << " ms\n";
+            //std::cout << std::fixed << std::setprecision(2) << avgReverse << "\n";
+
+            for (int i = 0; i < repeatCount; ++i) delete[] baseArrays[i];
+		}std::cout << "\n";
+
+        std::cout << "===== Intro Sort =====\n";
+		//Testy dla introSort
+        for (int s = 0; s < numSizes; ++s) {
+            int arraySize = arraySizes[s];
+            std::cout << "===== Rozmiar tablicy: " << arraySize << " =====\n";
+
+            int* baseArrays[repeatCount];
+            for (int i = 0; i < repeatCount; ++i)
+                baseArrays[i] = generateRandomArray(arraySize, i);
+
+            double avgRandom = runIntroSortExperiment(baseArrays, arraySize, [](int*) {});
+            std::cout << "Losowe:           " << std::fixed << std::setprecision(2) << avgRandom << " ms\n";
+            //std::cout << std::fixed << std::setprecision(2) << avgRandom << "\n";
+
+            for (int p = 0; p < numPercents; ++p) {
+                double percent = percentages[p];
+
+                for (int i = 0; i < repeatCount; ++i) {
+                    delete[] baseArrays[i];
+                    baseArrays[i] = generatePartiallySortedArray(arraySize, percent, i);
+                }
+
+                double avg = runIntroSortExperiment(baseArrays, arraySize, [](int*) {});
+                std::cout << "Sort " << std::setw(4) << int(percent * 100) << "%:        " << std::fixed << std::setprecision(2) << avg << " ms\n";
+                //std::cout << std::fixed << std::setprecision(2) << avg << "\n";
+
+            }
+
+            for (int i = 0; i < repeatCount; ++i) {
+                delete[] baseArrays[i];
+                baseArrays[i] = generateReverseSortedArray(arraySize);
+            }
+            double avgReverse = runIntroSortExperiment(baseArrays, arraySize, [](int*) {});
+            std::cout << "Odwrotne:         " << std::fixed << std::setprecision(2) << avgReverse << " ms\n";
+            //std::cout << std::fixed << std::setprecision(2) << avgReverse << "\n";
 
             for (int i = 0; i < repeatCount; ++i) delete[] baseArrays[i];
         }
