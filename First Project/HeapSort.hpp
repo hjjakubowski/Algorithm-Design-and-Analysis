@@ -3,8 +3,8 @@
 #include <functional>
 #include <algorithm>
 
-template <typename E, typename Compare = std::less<E>>
-void heapify(E* arr, std::size_t n, std::size_t i, const Compare& less = Compare{}) {
+template <typename E, typename Compare>
+void heapify(E* arr, std::size_t n, std::size_t i, const Compare& less) {
     std::size_t largest = i;
     std::size_t left = 2 * i + 1;
     std::size_t right = 2 * i + 2;
