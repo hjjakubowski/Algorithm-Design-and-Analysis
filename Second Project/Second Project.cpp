@@ -167,7 +167,7 @@ void benchmark_dijkstra() {
 
             double matrix_all_sum = 0, matrix_path_sum = 0;
             double list_all_sum = 0, list_path_sum = 0;
-            int repetitions = 10;
+            int repetitions = 100;
             for (int rep = 0; rep < repetitions; ++rep) {
                 auto edges = generate_random_edges(V, density, rng);
 
@@ -214,24 +214,55 @@ void benchmark_dijkstra() {
 
 void simple_driver_demo() {
     int V = 10;
-    double density = 0.5;
+    double density = 0.25;
     int src = 0, dest = 9;
     std::vector<int> vertices(V);
     for (int i = 0; i < V; ++i) vertices[i] = i;
     std::random_device rd;
     std::mt19937 rng(rd());
-    auto edges = generate_random_edges(V, density, rng);
 
-    // ======= MATRIX_GRAPH - single pair shortest path =======
-    Matrix_Graph<int> mgraph_single(vertices);
+    std::vector<std::tuple<int, int, double>> edges;
+    int max_edges = V * (V - 1) / 2;
+    int edge_count = static_cast<int>(density * max_edges);
+    std::vector<std::pair<int, int>> possible_edges;
+    for (int i = 0; i < V; ++i) {
+        for (int j = i + 1; j < V; ++j) {
+            possible_edges.emplace_back(i, j);
+        }
+    }
+    std::shuffle(possible_edges.begin(), possible_edges.end(), rng);
+    std::uniform_int_distribution<int> weight_dist(1, 10);
+    for (int i = 0; i < edge_count; ++i) {
+        int u = possible_edges[i].first;
+        int v = possible_edges[i].second;
+        double w = static_cast<double>(weight_dist(rng));
+        edges.emplace_back(u, v, w);
+    }
+
+    Matrix_Graph<int> mgraph(vertices);
+    List_Graph<int> lgraph(vertices);
     for (const auto& e : edges) {
         int u, v;
         double w;
         std::tie(u, v, w) = e;
-        mgraph_single.addEdge(u, v, w);
+        mgraph.addEdge(u, v, w);
+        lgraph.addEdge(u, v, w);
     }
+
+    // ======= MATRIX_GRAPH: Sąsiedzi i wagi =======
+    std::cout << "=== MATRIX_GRAPH: Sasiedzi i wagi ===\n";
+    for (int i = 0; i < V; ++i) {
+        std::cout << "Wierzcholek " << i << " sasiaduje z: ";
+        auto nbs = mgraph.neighbours(i);
+        for (const auto& nb : nbs) {
+            std::cout << nb.first << "(waga: " << nb.second << ") ";
+        }
+        std::cout << "\n";
+    }std::cout << "\n";
+
+    // ======= MATRIX_GRAPH: Dijkstra (single-pair shortest path) =======
     std::cout << "=== MATRIX_GRAPH: Dijkstra (single-pair shortest path) ===\n";
-    auto path = dijkstra_matrix_path(mgraph_single, src, dest, V);
+    auto path = dijkstra_matrix_path(mgraph, src, dest, V);
     if (path.empty()) {
         std::cout << "Brak sciezki z " << src << " do " << dest << ".\n";
     }
@@ -243,21 +274,14 @@ void simple_driver_demo() {
         }
         double total_weight = 0;
         for (size_t i = 1; i < path.size(); ++i)
-            total_weight += mgraph_single.getWeight(path[i - 1], path[i]);
+            total_weight += mgraph.getWeight(path[i - 1], path[i]);
         std::cout << "\nDlugosc sciezki: " << total_weight << "\n";
     }
     std::cout << "-----------------------------------------\n\n";
 
-    // ======= MATRIX_GRAPH - all pairs shortest path =======
-    Matrix_Graph<int> mgraph_all(vertices);
-    for (const auto& e : edges) {
-        int u, v;
-        double w;
-        std::tie(u, v, w) = e;
-        mgraph_all.addEdge(u, v, w);
-    }
+    // ======= MATRIX_GRAPH: Dijkstra (all-pairs shortest path) =======
     std::cout << "=== MATRIX_GRAPH: Dijkstra (all-pairs shortest path from " << src << ") ===\n";
-    auto dist_matrix = dijkstra_matrix_all(mgraph_all, src, V);
+    auto dist_matrix = dijkstra_matrix_all(mgraph, src, V);
     for (int i = 0; i < V; ++i) {
         std::cout << "Odleglosc z " << src << " do " << i << ": ";
         if (dist_matrix[i] == std::numeric_limits<double>::infinity()) {
@@ -270,16 +294,20 @@ void simple_driver_demo() {
     }
     std::cout << "-----------------------------------------\n\n";
 
-    // ======= LIST_GRAPH - single pair shortest path =======
-    List_Graph<int> lgraph_single(vertices);
-    for (const auto& e : edges) {
-        int u, v;
-        double w;
-        std::tie(u, v, w) = e;
-        lgraph_single.addEdge(u, v, w);
-    }
+    // ======= LIST_GRAPH: Sąsiedzi i wagi =======
+    std::cout << "=== LIST_GRAPH: Sasiedzi i wagi ===\n";
+    for (int i = 0; i < V; ++i) {
+        std::cout << "Wierzcholek " << i << " sasiaduje z: ";
+        auto nbs = lgraph.neighbours(i);
+        for (const auto& nb : nbs) {
+            std::cout << nb.first << "(waga: " << nb.second << ")  ";
+        }
+        std::cout << "\n";
+    }std::cout << "\n";
+
+    // ======= LIST_GRAPH: Dijkstra (single-pair shortest path) =======
     std::cout << "=== LIST_GRAPH: Dijkstra (single-pair shortest path) ===\n";
-    auto lpath = dijkstra_list_path(lgraph_single, src, dest, V);
+    auto lpath = dijkstra_list_path(lgraph, src, dest, V);
     if (lpath.empty()) {
         std::cout << "Brak sciezki z " << src << " do " << dest << ".\n";
     }
@@ -291,21 +319,14 @@ void simple_driver_demo() {
         }
         double total_weight = 0;
         for (size_t i = 1; i < lpath.size(); ++i)
-            total_weight += lgraph_single.getWeight(lpath[i - 1], lpath[i]);
+            total_weight += lgraph.getWeight(lpath[i - 1], lpath[i]);
         std::cout << "\nDlugosc sciezki: " << total_weight << "\n";
     }
     std::cout << "-----------------------------------------\n\n";
 
-    // ======= LIST_GRAPH - all pairs shortest path =======
-    List_Graph<int> lgraph_all(vertices);
-    for (const auto& e : edges) {
-        int u, v;
-        double w;
-        std::tie(u, v, w) = e;
-        lgraph_all.addEdge(u, v, w);
-    }
+    // ======= LIST_GRAPH: Dijkstra (all-pairs shortest path) =======
     std::cout << "=== LIST_GRAPH: Dijkstra (all-pairs shortest path from " << src << ") ===\n";
-    auto dist_list = dijkstra_list_all(lgraph_all, src, V);
+    auto dist_list = dijkstra_list_all(lgraph, src, V);
     for (int i = 0; i < V; ++i) {
         std::cout << "Odleglosc z " << src << " do " << i << ": ";
         if (dist_list[i] == std::numeric_limits<double>::infinity()) {
@@ -318,6 +339,7 @@ void simple_driver_demo() {
     }
     std::cout << "-----------------------------------------\n\n";
 }
+
 
 int main() {
     benchmark_dijkstra();
