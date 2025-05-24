@@ -22,12 +22,12 @@ std::vector<std::tuple<int, int, double>> generate_random_edges(int V, double de
     }
     std::shuffle(possible_edges.begin(), possible_edges.end(), rng);
 
-    std::uniform_int_distribution<int> weight_dist(1, std::numeric_limits<int>::max());
+    std::uniform_real_distribution<double> weight_dist(1.0, static_cast<double>(std::numeric_limits<int>::max()));
 
     for (int i = 0; i < edge_count; ++i) {
         int u = possible_edges[i].first;
         int v = possible_edges[i].second;
-        double w = static_cast<double>(weight_dist(rng));
+        double w = weight_dist(rng);
         edges.emplace_back(u, v, w);
     }
     return edges;
@@ -165,14 +165,12 @@ void benchmark_dijkstra() {
             std::vector<int> vertices(V);
             for (int i = 0; i < V; ++i) vertices[i] = i;
 
-
             double matrix_all_sum = 0, matrix_path_sum = 0;
             double list_all_sum = 0, list_path_sum = 0;
-			int repetitions = 100;
+            int repetitions = 10;
             for (int rep = 0; rep < repetitions; ++rep) {
                 auto edges = generate_random_edges(V, density, rng);
 
-                
                 Matrix_Graph<int> mgraph(vertices);
                 List_Graph<int> lgraph(vertices);
                 for (const auto& e : edges) {
@@ -183,25 +181,21 @@ void benchmark_dijkstra() {
                     lgraph.addEdge(u, v, w);
                 }
 
-                
                 auto start = std::chrono::high_resolution_clock::now();
                 auto dist_matrix = dijkstra_matrix_all(mgraph, 0, V);
                 auto end = std::chrono::high_resolution_clock::now();
                 matrix_all_sum += std::chrono::duration<double, std::milli>(end - start).count();
 
-                
                 start = std::chrono::high_resolution_clock::now();
                 auto path_matrix = dijkstra_matrix_path(mgraph, 0, V - 1, V);
                 end = std::chrono::high_resolution_clock::now();
                 matrix_path_sum += std::chrono::duration<double, std::milli>(end - start).count();
 
-                
                 start = std::chrono::high_resolution_clock::now();
                 auto dist_list = dijkstra_list_all(lgraph, 0, V);
                 end = std::chrono::high_resolution_clock::now();
                 list_all_sum += std::chrono::duration<double, std::milli>(end - start).count();
 
-                
                 start = std::chrono::high_resolution_clock::now();
                 auto path_list = dijkstra_list_path(lgraph, 0, V - 1, V);
                 end = std::chrono::high_resolution_clock::now();
@@ -217,7 +211,116 @@ void benchmark_dijkstra() {
         }
     }
 }
+
+void simple_driver_demo() {
+    int V = 10;
+    double density = 0.5;
+    int src = 0, dest = 9;
+    std::vector<int> vertices(V);
+    for (int i = 0; i < V; ++i) vertices[i] = i;
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    auto edges = generate_random_edges(V, density, rng);
+
+    // ======= MATRIX_GRAPH - single pair shortest path =======
+    Matrix_Graph<int> mgraph_single(vertices);
+    for (const auto& e : edges) {
+        int u, v;
+        double w;
+        std::tie(u, v, w) = e;
+        mgraph_single.addEdge(u, v, w);
+    }
+    std::cout << "=== MATRIX_GRAPH: Dijkstra (single-pair shortest path) ===\n";
+    auto path = dijkstra_matrix_path(mgraph_single, src, dest, V);
+    if (path.empty()) {
+        std::cout << "Brak sciezki z " << src << " do " << dest << ".\n";
+    }
+    else {
+        std::cout << "Najkrotsza sciezka z " << src << " do " << dest << ": ";
+        for (size_t i = 0; i < path.size(); ++i) {
+            std::cout << path[i];
+            if (i + 1 < path.size()) std::cout << " -> ";
+        }
+        double total_weight = 0;
+        for (size_t i = 1; i < path.size(); ++i)
+            total_weight += mgraph_single.getWeight(path[i - 1], path[i]);
+        std::cout << "\nDlugosc sciezki: " << total_weight << "\n";
+    }
+    std::cout << "-----------------------------------------\n\n";
+
+    // ======= MATRIX_GRAPH - all pairs shortest path =======
+    Matrix_Graph<int> mgraph_all(vertices);
+    for (const auto& e : edges) {
+        int u, v;
+        double w;
+        std::tie(u, v, w) = e;
+        mgraph_all.addEdge(u, v, w);
+    }
+    std::cout << "=== MATRIX_GRAPH: Dijkstra (all-pairs shortest path from " << src << ") ===\n";
+    auto dist_matrix = dijkstra_matrix_all(mgraph_all, src, V);
+    for (int i = 0; i < V; ++i) {
+        std::cout << "Odleglosc z " << src << " do " << i << ": ";
+        if (dist_matrix[i] == std::numeric_limits<double>::infinity()) {
+            std::cout << "brak sciezki";
+        }
+        else {
+            std::cout << dist_matrix[i];
+        }
+        std::cout << "\n";
+    }
+    std::cout << "-----------------------------------------\n\n";
+
+    // ======= LIST_GRAPH - single pair shortest path =======
+    List_Graph<int> lgraph_single(vertices);
+    for (const auto& e : edges) {
+        int u, v;
+        double w;
+        std::tie(u, v, w) = e;
+        lgraph_single.addEdge(u, v, w);
+    }
+    std::cout << "=== LIST_GRAPH: Dijkstra (single-pair shortest path) ===\n";
+    auto lpath = dijkstra_list_path(lgraph_single, src, dest, V);
+    if (lpath.empty()) {
+        std::cout << "Brak sciezki z " << src << " do " << dest << ".\n";
+    }
+    else {
+        std::cout << "Najkrotsza sciezka z " << src << " do " << dest << ": ";
+        for (size_t i = 0; i < lpath.size(); ++i) {
+            std::cout << lpath[i];
+            if (i + 1 < lpath.size()) std::cout << " -> ";
+        }
+        double total_weight = 0;
+        for (size_t i = 1; i < lpath.size(); ++i)
+            total_weight += lgraph_single.getWeight(lpath[i - 1], lpath[i]);
+        std::cout << "\nDlugosc sciezki: " << total_weight << "\n";
+    }
+    std::cout << "-----------------------------------------\n\n";
+
+    // ======= LIST_GRAPH - all pairs shortest path =======
+    List_Graph<int> lgraph_all(vertices);
+    for (const auto& e : edges) {
+        int u, v;
+        double w;
+        std::tie(u, v, w) = e;
+        lgraph_all.addEdge(u, v, w);
+    }
+    std::cout << "=== LIST_GRAPH: Dijkstra (all-pairs shortest path from " << src << ") ===\n";
+    auto dist_list = dijkstra_list_all(lgraph_all, src, V);
+    for (int i = 0; i < V; ++i) {
+        std::cout << "Odleglosc z " << src << " do " << i << ": ";
+        if (dist_list[i] == std::numeric_limits<double>::infinity()) {
+            std::cout << "brak sciezki";
+        }
+        else {
+            std::cout << dist_list[i];
+        }
+        std::cout << "\n";
+    }
+    std::cout << "-----------------------------------------\n\n";
+}
+
 int main() {
-	benchmark_dijkstra();
-	return 0;
+    benchmark_dijkstra();
+    simple_driver_demo();
+    return 0;
 }
