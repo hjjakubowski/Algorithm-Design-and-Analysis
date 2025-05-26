@@ -43,13 +43,13 @@ std::vector<double> dijkstra_matrix_all(const Matrix_Graph<int>& graph, int src,
     pq.emplace(0.0, src);
 
     while (!pq.empty()) {
-        int u = pq.top().second;
+        double u = pq.top().second;
         double d = pq.top().first;
         pq.pop();
         if (visited[u]) continue;
         visited[u] = true;
         for (const auto& nb : graph.neighbours(u)) {
-            int v = nb.first;
+            double v = nb.first;
             double w = nb.second;
             if (dist[u] + w < dist[v]) {
                 dist[v] = dist[u] + w;
@@ -71,13 +71,13 @@ std::vector<int> dijkstra_matrix_path(const Matrix_Graph<int>& graph, int src, i
     pq.emplace(0.0, src);
 
     while (!pq.empty()) {
-        int u = pq.top().second;
+        double u = pq.top().second;
         double d = pq.top().first;
         pq.pop();
         if (visited[u]) continue;
         visited[u] = true;
         for (const auto& nb : graph.neighbours(u)) {
-            int v = nb.first;
+            double v = nb.first;
             double w = nb.second;
             if (dist[u] + w < dist[v]) {
                 dist[v] = dist[u] + w;
@@ -103,13 +103,13 @@ std::vector<double> dijkstra_list_all(const List_Graph<int>& graph, int src, int
     pq.emplace(0.0, src);
 
     while (!pq.empty()) {
-        int u = pq.top().second;
+        double u = pq.top().second;
         double d = pq.top().first;
         pq.pop();
         if (visited[u]) continue;
         visited[u] = true;
         for (const auto& nb : graph.neighbours(u)) {
-            int v = nb.first;
+            double v = nb.first;
             double w = nb.second;
             if (dist[u] + w < dist[v]) {
                 dist[v] = dist[u] + w;
@@ -131,13 +131,13 @@ std::vector<int> dijkstra_list_path(const List_Graph<int>& graph, int src, int d
     pq.emplace(0.0, src);
 
     while (!pq.empty()) {
-        int u = pq.top().second;
+        double u = pq.top().second;
         double d = pq.top().first;
         pq.pop();
         if (visited[u]) continue;
         visited[u] = true;
         for (const auto& nb : graph.neighbours(u)) {
-            int v = nb.first;
+            double v = nb.first;
             double w = nb.second;
             if (dist[u] + w < dist[v]) {
                 dist[v] = dist[u] + w;
