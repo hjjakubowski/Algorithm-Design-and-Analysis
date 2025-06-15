@@ -2,9 +2,11 @@
 #include <string>
 #include <vector>
 #include <random>
+#include <type_traits>
 #include "chess.hpp"
 
 using namespace chess;
+
 void print_board(const Board& board) {
     std::string fen = board.getFen();
     auto parts = utils::splitString(fen, ' ');
@@ -21,7 +23,7 @@ void print_board(const Board& board) {
             current += c;
         }
     }
-    lines.push_back(current); 
+    lines.push_back(current);
 
     std::cout << "\n  +-----------------+\n";
     for (int i = 0; i < 8; ++i) {
@@ -51,7 +53,7 @@ Move find_move_from_input(const std::string& input, const Board& board) {
             return m;
     }
 
-    return Move(Move::NO_MOVE); 
+    return Move(Move::NO_MOVE);
 }
 
 Move get_random_legal_move(const Board& board) {
@@ -62,10 +64,22 @@ Move get_random_legal_move(const Board& board) {
 
     static std::random_device rd;
     static std::mt19937 rng(rd());
-    std::uniform_int_distribution<int> dist(0, legal_moves.size() - 1);
 
+    std::uniform_int_distribution<int> dist(0, legal_moves.size() - 1);
     return legal_moves[dist(rng)];
 }
+
+const char* reason_to_str(GameResultReason reason) {
+    switch (reason) {
+    case GameResultReason::CHECKMATE: return "Checkmate";
+    case GameResultReason::STALEMATE: return "Stalemate";
+    case GameResultReason::INSUFFICIENT_MATERIAL: return "Insufficient material";
+    case GameResultReason::FIFTY_MOVE_RULE: return "50-move rule";
+    case GameResultReason::THREEFOLD_REPETITION: return "Threefold repetition";
+    default: return "Unknown";
+    }
+}
+
 
 int main() {
     Board board;
@@ -74,8 +88,25 @@ int main() {
     while (true) {
         print_board(board);
 
+        auto [reason, result] = board.isGameOver();
+
+        if (reason != GameResultReason::NONE) {
+            std::cout << reason_to_str(reason) << ". ";
+
+            if (result == GameResult::WIN) {
+                std::cout << (board.sideToMove() == Color::WHITE ? "Black" : "White") << " wins.\n";
+            }
+            else if (result == GameResult::DRAW) {
+                std::cout << "Draw.\n";
+            }
+            else {
+                std::cout << "Game over.\n";
+            }
+            break;
+        }
+
         if (board.sideToMove() == Color::WHITE) {
-            std::cout << "Your move (UCI format, e.g. e2e4), or 'undo'/'quit': ";
+            std::cout << "Your move (e.g. e7e8 or e7e8q), or 'undo'/'quit': ";
             std::string input;
             std::cin >> input;
 
@@ -107,17 +138,12 @@ int main() {
             std::cout << "Computer is thinking...\n";
             Move ai_move = get_random_legal_move(board);
 
-            if (ai_move == Move(Move::NO_MOVE)) {
-                std::cout << "Game over. No legal moves.\n";
-                break;
-            }
-
             std::cout << "Computer plays: " << uci::moveToUci(ai_move) << "\n";
             board.makeMove(ai_move);
             move_history.push_back(ai_move);
         }
     }
 
-    std::cout << "Game ended.\n";
+    std::cout << "\n";
     return 0;
 }
