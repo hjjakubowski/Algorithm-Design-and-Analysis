@@ -4,6 +4,8 @@
 #include <random>
 #include <type_traits>
 #include "chess.hpp"
+#include "AI.hpp"
+
 
 using namespace chess;
 
@@ -56,18 +58,6 @@ Move find_move_from_input(const std::string& input, const Board& board) {
     return Move(Move::NO_MOVE);
 }
 
-Move get_random_legal_move(const Board& board) {
-    Movelist legal_moves;
-    movegen::legalmoves(legal_moves, board);
-
-    if (legal_moves.empty()) return Move(Move::NO_MOVE);
-
-    static std::random_device rd;
-    static std::mt19937 rng(rd());
-
-    std::uniform_int_distribution<int> dist(0, legal_moves.size() - 1);
-    return legal_moves[dist(rng)];
-}
 
 const char* reason_to_str(GameResultReason reason) {
     switch (reason) {
@@ -136,7 +126,7 @@ int main() {
         }
         else {
             std::cout << "Computer is thinking...\n";
-            Move ai_move = get_random_legal_move(board);
+            Move ai_move = get_best_move(board, 6);
 
             std::cout << "Computer plays: " << uci::moveToUci(ai_move) << "\n";
             board.makeMove(ai_move);
