@@ -1,139 +1,91 @@
-﻿#include <iostream>
+﻿#include "board.hpp"
+#include "move.hpp"
+#include <iostream>
 #include <string>
-#include <vector>
-#include <random>
-#include <type_traits>
-#include "chess.hpp"
-#include "AI.hpp"
-
-
-using namespace chess;
-
-void print_board(const Board& board) {
-    std::string fen = board.getFen();
-    auto parts = utils::splitString(fen, ' ');
-    std::string rows(parts[0]);
-
-    std::vector<std::string> lines;
-    std::string current;
-    for (char c : rows) {
-        if (c == '/') {
-            lines.push_back(current);
-            current.clear();
-        }
-        else {
-            current += c;
-        }
-    }
-    lines.push_back(current);
-
-    std::cout << "\n  +-----------------+\n";
-    for (int i = 0; i < 8; ++i) {
-        std::cout << 8 - i << " | ";
-        for (char c : lines[i]) {
-            if (isdigit(c)) {
-                int empty = c - '0';
-                for (int j = 0; j < empty; ++j)
-                    std::cout << ". ";
-            }
-            else {
-                std::cout << c << ' ';
-            }
-        }
-        std::cout << "|\n";
-    }
-    std::cout << "  +-----------------+\n";
-    std::cout << "    a b c d e f g h\n\n";
-}
-
-Move find_move_from_input(const std::string& input, const Board& board) {
-    Movelist legal_moves;
-    movegen::legalmoves(legal_moves, board);
-
-    for (const Move& m : legal_moves) {
-        if (uci::moveToUci(m) == input)
-            return m;
-    }
-
-    return Move(Move::NO_MOVE);
-}
-
-
-const char* reason_to_str(GameResultReason reason) {
-    switch (reason) {
-    case GameResultReason::CHECKMATE: return "Checkmate";
-    case GameResultReason::STALEMATE: return "Stalemate";
-    case GameResultReason::INSUFFICIENT_MATERIAL: return "Insufficient material";
-    case GameResultReason::FIFTY_MOVE_RULE: return "50-move rule";
-    case GameResultReason::THREEFOLD_REPETITION: return "Threefold repetition";
-    default: return "Unknown";
-    }
-}
+#include "test.hpp"
 
 
 int main() {
+
+    test_chess_engine();
+   
     Board board;
-    std::vector<Move> move_history;
+    PieceColor turn = WHITE;
+    board.print();
 
     while (true) {
-        print_board(board);
-
-        auto [reason, result] = board.isGameOver();
-
-        if (reason != GameResultReason::NONE) {
-            std::cout << reason_to_str(reason) << ". ";
-
-            if (result == GameResult::WIN) {
-                std::cout << (board.sideToMove() == Color::WHITE ? "Black" : "White") << " wins.\n";
-            }
-            else if (result == GameResult::DRAW) {
-                std::cout << "Draw.\n";
-            }
-            else {
-                std::cout << "Game over.\n";
-            }
+        if (board.isCheckmate(turn)) {
+            std::cout << "Mat! " << (turn == WHITE ? "Czarne" : "Biale") << " wygrywaja.\n";
             break;
         }
-
-        if (board.sideToMove() == Color::WHITE) {
-            std::cout << "Your move (e.g. e7e8 or e7e8q), or 'undo'/'quit': ";
-            std::string input;
-            std::cin >> input;
-
-            if (input == "quit") break;
-
-            if (input == "undo") {
-                if (move_history.size() >= 2) {
-                    board.unmakeMove(move_history.back());
-                    move_history.pop_back();
-                    board.unmakeMove(move_history.back());
-                    move_history.pop_back();
-                }
-                else {
-                    std::cout << "Nothing to undo.\n";
-                }
-                continue;
-            }
-
-            Move move = find_move_from_input(input, board);
-            if (move == Move(Move::NO_MOVE)) {
-                std::cout << "Invalid or illegal move. Try again.\n";
-                continue;
-            }
-
-            board.makeMove(move);
-            move_history.push_back(move);
+        if (board.isStalemate(turn)) {
+            std::cout << "Pat! Remis.\n";
+            break;
         }
-        else {
-            std::cout << "Computer is thinking...\n";
-            Move ai_move = get_best_move(board, 6);
-
-            std::cout << "Computer plays: " << uci::moveToUci(ai_move) << "\n";
-            board.makeMove(ai_move);
-            move_history.push_back(ai_move);
+        if (board.isCheck(turn)) {
+            std::cout << "Szach!\n";
         }
+
+        std::cout << ((turn == WHITE) ? "Biale" : "Czarne") << " podaj ruch (np. e2e4 lub undo): ";
+        std::string input;
+        std::cin >> input;
+
+        if (input == "undo") {
+            board.undoMove();
+            turn = (turn == WHITE) ? BLACK : WHITE;
+            board.print();
+            continue;
+        }
+        
+        if (input == "quit") {
+			std::cout << "Koniec gry.\n";
+			break;
+        }
+
+        if (input.length() < 4 || input.length() > 5) {
+            std::cout << "Zly format ruchu!\n";
+            continue;
+        }
+
+        Move move = Move::fromString(input);
+        if (move.fromY < 0 || move.fromY > 7 || move.fromX < 0 || move.fromX > 7 ||
+            move.toY < 0 || move.toY > 7 || move.toX < 0 || move.toX > 7) {
+            std::cout << "Niepoprawne pole!\n";
+            continue;
+        }
+        if (getPieceType(board.squares[move.fromY][move.fromX]) == PAWN) {
+            std::cout << "Legalne ruchy pionka z " << char('a' + move.fromX) << (move.fromY + 1) << ": ";
+            auto moves = board.legalPawnMoves(move.fromY, move.fromX);
+            for (auto& m : moves) {
+                std::cout << char('a' + m.toX) << (m.toY + 1) << " ";
+            }
+            std::cout << std::endl;
+        }
+
+
+        uint8_t srcPiece = board.squares[move.fromY][move.fromX];
+        if (getPieceColor(srcPiece) != turn) {
+            std::cout << "To nie twoja figura!\n";
+            continue;
+        }
+
+        if (!board.isLegalMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece)) {
+            std::cout << "Nielegalny ruch!\n";
+            continue;
+        }
+
+        // Testuj czy ruch nie powoduje szacha swojego krola
+        Board after = board;
+        after.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
+        if (after.isCheck(turn)) {
+            std::cout << "Nie mozna zostawic swojego krola pod szachem!\n";
+            continue;
+        }
+
+        board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
+        turn = (turn == WHITE) ? BLACK : WHITE;
+        board.print();
     }
 
-    std::cout << "\n";
     return 0;
 }
