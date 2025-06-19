@@ -1,20 +1,25 @@
 #include "move.hpp"
 #include "piece.hpp"
+#include <cassert>
+
 
 Move Move::fromString(const std::string& str) {
+    assert(str.length() >= 4);
     int fx = str[0] - 'a';
     int fy = str[1] - '1';
     int tx = str[2] - 'a';
     int ty = str[3] - '1';
-    uint8_t promo = 0;  
-    if (str.size() == 5) {
-        switch (str[4]) {
-        case 'h': promo = QUEEN; break;
-        case 'w': promo = ROOK; break;
-        case 'g': promo = KNIGHT; break;
-        case 's': promo = BISHOP; break;
+    PieceType promo = NONE_TYPE;
+
+    if (str.length() == 5) {
+        char promoChar = str[4];
+        switch (promoChar) {
+        case 'q': promo = QUEEN;  break;
+        case 'r': promo = ROOK;   break;
+        case 'n': promo = KNIGHT; break;
+        case 'b': promo = BISHOP; break;
+
         }
     }
-    return Move(fy, fx, ty, tx, promo);
+    return Move(sq(fy, fx), sq(ty, tx), promo);
 }
-

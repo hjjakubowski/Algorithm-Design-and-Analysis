@@ -1,19 +1,21 @@
 ﻿#include "board.hpp"
+#include "bitboard_tables.hpp"
 #include "move.hpp"
 #include "AI.hpp"
+#include "test.hpp"
 #include <iostream>
 #include <string>
-#include "test.hpp"
+#include <vector>
 
 enum GameMode { HUMAN_VS_HUMAN = 1, HUMAN_VS_AI = 2, AI_VS_AI = 3 };
 enum AiStrength { NEWBIE = 1, CLUB = 2, GRANDMASTER = 3 };
 
 int get_ai_depth(AiStrength level) {
     switch (level) {
-    case NEWBIE: return 4;
-    case CLUB:   return 6;     
-    case GRANDMASTER: return 8;     
-    default:     return 4;
+    case NEWBIE: return 5;
+    case CLUB:   return 7;
+    case GRANDMASTER: return 9;
+    default:     return 5;
     }
 }
 
@@ -26,8 +28,29 @@ std::string ai_name(AiStrength level) {
     }
 }
 
+void print_move(const Move& move) {
+    char fromX = 'a' + (move.from % 8);
+    char fromY = '1' + (move.from / 8);
+    char toX = 'a' + (move.to % 8);
+    char toY = '1' + (move.to / 8);
+
+    std::cout << fromX << fromY << toX << toY;
+    if (move.promoPiece != NONE_TYPE) {
+        switch (move.promoPiece) {
+        case QUEEN:  std::cout << "q"; break;
+        case ROOK:   std::cout << "r"; break;
+        case KNIGHT: std::cout << "n"; break;
+        case BISHOP: std::cout << "b"; break;
+        default: break;
+        }
+    }
+}
+
 int main() {
-    test_chess_engine();
+    init_knight_attacks();
+    init_king_attacks();
+    //test_chess_engine();
+    
 
     std::cout << "Wybierz tryb gry:\n";
     std::cout << "1. Czlowiek vs Czlowiek\n";
@@ -56,10 +79,12 @@ int main() {
         black_depth = get_ai_depth(static_cast<AiStrength>(black_ai));
         std::cout << "Wybrano: Biale: " << ai_name(static_cast<AiStrength>(white_ai))
             << " | Czarne: " << ai_name(static_cast<AiStrength>(black_ai)) << "\n";
-    }std::cout << "\n";
+    }
+    std::cout << "\n";
 
     Board board;
     PieceColor turn = WHITE;
+    board.setInitial();
     board.print();
 
     while (true) {
@@ -75,27 +100,25 @@ int main() {
             std::cout << "Szach!\n";
         }
 
-        // Tryb AI vs AI
+        // AI vs AI lub AI (czarne) vs Człowiek
         if (mode_choice == AI_VS_AI ||
             (mode_choice == HUMAN_VS_AI && turn == BLACK)) {
             int ai_depth = (turn == WHITE) ? white_depth : black_depth;
             Move aiMove = get_best_move_AI(board, ai_depth, turn);
-            if (aiMove.fromY == aiMove.toY && aiMove.fromX == aiMove.toX && aiMove.promoPiece == 0) {
+            if (aiMove.from == aiMove.to && aiMove.promoPiece == NONE_TYPE) {
                 std::cout << "AI nie widzi ruchu.\n";
                 break;
             }
-            std::cout << (turn == WHITE ? "Biale" : "Czarne") << " AI wybralo ruch: "
-                << char('a' + aiMove.fromX) << (aiMove.fromY + 1)
-                << char('a' + aiMove.toX) << (aiMove.toY + 1)
-                << (aiMove.promoPiece == QUEEN ? "h" : aiMove.promoPiece == ROOK ? "w" : aiMove.promoPiece == KNIGHT ? "g" : aiMove.promoPiece == BISHOP ? "s" : "")
-                << std::endl;
-            board.makeMove(aiMove.fromY, aiMove.fromX, aiMove.toY, aiMove.toX, aiMove.promoPiece);
+            std::cout << (turn == WHITE ? "Biale" : "Czarne") << " AI wybralo ruch: ";
+            print_move(aiMove);
+            std::cout << std::endl;
+            board.makeMove(aiMove, turn);
             turn = (turn == WHITE) ? BLACK : WHITE;
             board.print();
             continue;
         }
 
-        // Tryb Człowiek vs Człowiek oraz białe w Człowiek vs AI
+        // Człowiek vs Człowiek lub białe w Człowiek vs AI
         std::cout << ((turn == WHITE) ? "Biale" : "Czarne") << " podaj ruch (np. e2e4 lub undo): ";
         std::string input;
         std::cin >> input;
@@ -116,41 +139,25 @@ int main() {
         }
 
         Move move = Move::fromString(input);
-        if (move.fromY < 0 || move.fromY > 7 || move.fromX < 0 || move.fromX > 7 ||
-            move.toY < 0 || move.toY > 7 || move.toX < 0 || move.toX > 7) {
+        if (move.from < 0 || move.from > 63 || move.to < 0 || move.to > 63) {
             std::cout << "Niepoprawne pole!\n";
             continue;
         }
-        if (getPieceType(board.squares[move.fromY][move.fromX]) == PAWN) {
-            std::cout << "Legalne ruchy pionka z " << char('a' + move.fromX) << (move.fromY + 1) << ": ";
-            auto moves = board.legalPawnMoves(move.fromY, move.fromX);
-            for (auto& m : moves) {
-                std::cout << char('a' + m.toX) << (m.toY + 1) << " ";
-            }
-            std::cout << std::endl;
-        }
 
-        uint8_t srcPiece = board.squares[move.fromY][move.fromX];
-        if (getPieceColor(srcPiece) != turn) {
-            std::cout << "To nie twoja figura!\n";
-            continue;
-        }
-
-        if (!board.isLegalMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece)) {
+        if (!board.isLegalMove(move, turn)) {
             std::cout << "Nielegalny ruch!\n";
             continue;
         }
 
-        Board after = board;
-        after.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
-        if (after.isCheck(turn)) {
-            std::cout << "Nie mozna zostawic swojego krola pod szachem!\n";
-            continue;
-        }
-
-        board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
+        board.makeMove(move, turn);
         turn = (turn == WHITE) ? BLACK : WHITE;
         board.print();
+
+        if (board.halfmoveClock >= 100) {
+            std::cout << "Remis! (50 ruchów bez bicia i ruchu pionkiem)\n";
+            break;
+        }
+
     }
 
     return 0;
