@@ -1,6 +1,7 @@
 #pragma once
 #include <intrin.h>
 #include <cstdint>
+#include <random>
 
 enum PieceType : uint8_t {
     PAWN = 0,
@@ -40,3 +41,4 @@ inline int bit_scan_forward(Bitboard b) {
     _BitScanForward64(&idx, b);
     return static_cast<int>(idx);
 }
+

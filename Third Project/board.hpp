@@ -6,9 +6,9 @@
 #include <cstdint>
 
 struct Board {
-    Bitboard pieces[2][6]; 
-    Bitboard occupied[2];  
-    Bitboard all;          
+    Bitboard pieces[2][6];
+    Bitboard occupied[2];
+    Bitboard all;
     int halfmoveClock = 0;
 
     struct HistoryEntry {
@@ -21,8 +21,8 @@ struct Board {
     std::vector<HistoryEntry> history;
 
     Board();
-    void setInitial();    
-    void print() const; 
+    void setInitial();
+    void print() const;
 
     bool isLegalMove(const Move& m, PieceColor color) const;
     bool makeMove(const Move& m, PieceColor color);
@@ -31,8 +31,9 @@ struct Board {
     bool isCheck(PieceColor color) const;
     bool isCheckmate(PieceColor color) const;
     bool isStalemate(PieceColor color) const;
+    bool isSquareAttacked(int sq, PieceColor byColor) const;
 
-    std::vector<Move> generateAllMoves(PieceColor color) const;
+    std::vector<Move> generateAllLegalMoves(PieceColor color) const;
 
     int findKing(PieceColor color) const;
 };

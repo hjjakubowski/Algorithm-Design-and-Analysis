@@ -1,5 +1,5 @@
 #include "AI.hpp"
-
+#include "zorbist.hpp"
 
 const int pawn_table[64] = {
       0,  0,  0,  0,  0,  0,  0,  0,
@@ -91,8 +91,30 @@ int positional_bonus(PieceType pt, PieceColor color, int sq) {
     default:     return 0;
     }
 }
+inline bool move_capture_first(const Board& board, const Move& m, PieceColor color) {
+    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
+    for (int t = 0; t < 6; ++t)
+        if (board.pieces[enemy][t] & (1ULL << m.to))
+            return true;
+    return false;
+}
+void order_moves(Board& board, std::vector<Move>& moves, PieceColor color) {
+    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
+        return move_capture_first(board, a, color) > move_capture_first(board, b, color);
+        });
+}
 
 int evaluate_heuristics(const Board& board) {
+
+    if (board.isCheckmate(BLACK))
+        return 100000 - board.halfmoveClock; 
+    if (board.isCheckmate(WHITE))
+        return -100000 + board.halfmoveClock;
+
+
+    if (board.isStalemate(BLACK) || board.isStalemate(WHITE) || board.halfmoveClock >= 100)
+        return 0;
+
     int score = 0;
     for (int color = 0; color <= 1; ++color) {
         for (int pt = 0; pt <= 5; ++pt) {
@@ -105,46 +127,120 @@ int evaluate_heuristics(const Board& board) {
             }
         }
     }
+    
+    int wq = -1, wk = -1, bk = -1;
+    int whiteCount = 0, blackCount = 0;
+
+    if (whiteCount == 2 && blackCount == 1 && wq != -1 && wk != -1 && bk != -1) {
+        int blackX = bk % 8, blackY = bk / 8;
+
+ 
+        int edge_dist = std::min({ blackX, 7 - blackX, blackY, 7 - blackY });
+
+        score += (3 - edge_dist) * 500; // Potê¿ny bonus za zagonienie do rogu
+        int kk_dist = std::abs((wk % 8) - blackX) + std::abs((wk / 8) - blackY);
+        score += (8 - kk_dist) * 100;
+
+     
+        int qk_dist = std::abs((wq % 8) - blackX) + std::abs((wq / 8) - blackY);
+        score += (8 - qk_dist) * 10;
+
+    
+        score -= board.halfmoveClock * 50; // AI szybciej d¹¿y do mata
+
+ 
+        if ((edge_dist == 0) && (kk_dist <= 2)) {
+            score += 90000;
+        }
+    }
+
+
     return score;
 }
+int quiescence(Board& board, int alpha, int beta, PieceColor color) {
+    int stand_pat = evaluate_heuristics(board);
+    if (stand_pat >= beta)
+        return beta;
+    if (alpha < stand_pat)
+        alpha = stand_pat;
+
+    auto moves = board.generateAllLegalMoves(color);
+    std::vector<Move> tactical_moves;
+    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
+    for (const Move& m : moves) {
+        bool isCapture = false;
+        for (int t = 0; t < 6; ++t)
+            if (board.pieces[enemy][t] & (1ULL << m.to))
+                isCapture = true;
+        if (isCapture || m.promoPiece != NONE_TYPE) {
+            tactical_moves.push_back(m);
+        }
+    }
+
+    for (const Move& m : tactical_moves) {
+        board.makeMove(m, color);
+        int score = -quiescence(board, -beta, -alpha, enemy);
+        board.undoMove();
+
+        if (score >= beta)
+            return beta;
+        if (score > alpha)
+            alpha = score;
+    }
+    return alpha;
+}
+
 
 int minimax(Board& board, int depth, int alpha, int beta, bool maximizingPlayer, PieceColor color) {
     PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    if (depth == 0 || board.isCheckmate(color) || board.isStalemate(color))
-        return evaluate_heuristics(board);
 
-    auto moves = board.generateAllMoves(color);
-    if (moves.empty())
-        return evaluate_heuristics(board);
+    uint64_t key = hash_board(board);
+    auto it = transTable.find(key);
+    if (it != transTable.end() && it->second.depth >= depth) {
+        return it->second.value;
+    }
+
+    if (depth == 0 || board.isCheckmate(color) || board.isStalemate(color))
+        return quiescence(board, alpha, beta, color);
+
+    auto moves = board.generateAllLegalMoves(color);
+
+    order_moves(board, moves, color);
+
+    int bestEval = maximizingPlayer ? -1000000 : 1000000;
 
     if (maximizingPlayer) {
-        int maxEval = -1000000;
         for (const Move& m : moves) {
             board.makeMove(m, color);
             int eval = minimax(board, depth - 1, alpha, beta, false, enemy);
             board.undoMove();
-            maxEval = std::max(maxEval, eval);
+            bestEval = std::max(bestEval, eval);
             alpha = std::max(alpha, eval);
             if (beta <= alpha) break;
         }
-        return maxEval;
     }
     else {
-        int minEval = 1000000;
         for (const Move& m : moves) {
             board.makeMove(m, color);
             int eval = minimax(board, depth - 1, alpha, beta, true, enemy);
             board.undoMove();
-            minEval = std::min(minEval, eval);
+            bestEval = std::min(bestEval, eval);
             beta = std::min(beta, eval);
             if (beta <= alpha) break;
         }
-        return minEval;
     }
+
+    transTable[key] = { depth, bestEval };
+
+    return bestEval;
 }
 
+
+
 Move get_best_move_AI(Board& board, int depth, PieceColor color) {
-    auto moves = board.generateAllMoves(color);
+    auto moves = board.generateAllLegalMoves(color);
+    order_moves(board, moves, color);
+
     Move bestMove;
     int bestEval = (color == WHITE) ? -1000000 : 1000000;
     for (const Move& m : moves) {

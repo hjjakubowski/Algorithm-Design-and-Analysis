@@ -52,17 +52,26 @@ void Board::print() const {
     }
     std::cout << "  +-----------------+\n";
     std::cout << "    a b c d e f g h\n";
+    std::cout << "Liczba polruchow od ostatniego bicia lub ruchu pionkiem: " << halfmoveClock << "\n";
 }
+
 
 inline void push_moves_from_mask(std::vector<Move>& moves, int from, Bitboard mask, const Board& board, PieceColor color, PieceType promo = NONE_TYPE) {
     Bitboard own = board.occupied[color];
+    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
+    Bitboard enemyKing = board.pieces[enemy][KING];
     while (mask) {
         int to = bit_scan_forward(mask);
+        if (enemyKing & (1ULL << to)) {
+            mask &= mask - 1;
+            continue;
+        }
         if (!(own & (1ULL << to)))
             moves.emplace_back(from, to, promo);
         mask &= mask - 1;
     }
 }
+
 
 std::vector<Move> pawnMoves(const Board& board, PieceColor color) {
     std::vector<Move> moves;
@@ -163,9 +172,26 @@ std::vector<Move> kingMoves(const Board& board, PieceColor color) {
     if (!king) return moves;
     int from = bit_scan_forward(king);
     Bitboard mask = king_attacks[from] & ~board.occupied[color];
-    push_moves_from_mask(moves, from, mask, board, color);
+
+    for (int to = 0; to < 64; ++to) {
+        if (!(mask & (1ULL << to))) continue;
+
+        Board tmp = board;
+        tmp.pieces[color][KING] &= ~(1ULL << from);
+        tmp.occupied[color] &= ~(1ULL << from);
+        tmp.all &= ~(1ULL << from);
+        tmp.pieces[color][KING] |= (1ULL << to);
+        tmp.occupied[color] |= (1ULL << to);
+        tmp.all |= (1ULL << to);
+
+        if (!board.isSquareAttacked(to, (color == WHITE) ? BLACK : WHITE)) {
+            moves.emplace_back(from, to);
+        }
+
+    }
     return moves;
 }
+
 
 Bitboard bishop_attacks(int from, const Board& board) {
     Bitboard result = 0;
@@ -237,16 +263,23 @@ std::vector<Move> queenMoves(const Board& board, PieceColor color) {
     return moves;
 }
 
-std::vector<Move> Board::generateAllMoves(PieceColor color) const {
-    std::vector<Move> moves;
+std::vector<Move> Board::generateAllLegalMoves(PieceColor color) const {
+    std::vector<Move> moves, legalMoves;
     auto pawns = pawnMoves(*this, color); moves.insert(moves.end(), pawns.begin(), pawns.end());
     auto knights = knightMoves(*this, color); moves.insert(moves.end(), knights.begin(), knights.end());
     auto bishops = bishopMoves(*this, color); moves.insert(moves.end(), bishops.begin(), bishops.end());
     auto rooks = rookMoves(*this, color); moves.insert(moves.end(), rooks.begin(), rooks.end());
     auto queens = queenMoves(*this, color); moves.insert(moves.end(), queens.begin(), queens.end());
     auto kings = kingMoves(*this, color); moves.insert(moves.end(), kings.begin(), kings.end());
-    return moves;
+    for (const auto& m : moves) {
+        Board tmp = *this;
+        tmp.makeMove(m, color);
+        if (!tmp.isCheck(color))
+            legalMoves.push_back(m);
+    }
+    return legalMoves;
 }
+
 
 bool Board::makeMove(const Move& m, PieceColor color) {
     HistoryEntry h;
@@ -254,18 +287,16 @@ bool Board::makeMove(const Move& m, PieceColor color) {
     memcpy(h.occupied, occupied, sizeof(occupied));
     h.all = all;
     h.move = m;
-    h.halfmoveClock = halfmoveClock; 
+    h.halfmoveClock = halfmoveClock;
     history.push_back(h);
 
-    bool isPawnMove = false;
-    if (pieces[color][PAWN] & (1ULL << m.from)) isPawnMove = true;
+    bool isPawnMove = (pieces[color][PAWN] & (1ULL << m.from));
     bool isCapture = false;
+    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
     for (int t = 0; t < 6; ++t) {
-        for (int c = 0; c < 2; ++c) {
-            if (pieces[c][t] & (1ULL << m.to)) {
-                isCapture = true;
-                break;
-            }
+        if (pieces[enemy][t] & (1ULL << m.to)) {
+            isCapture = true;
+            break;
         }
     }
 
@@ -302,6 +333,7 @@ bool Board::makeMove(const Move& m, PieceColor color) {
     return true;
 }
 
+
 void Board::undoMove() {
     if (history.empty()) return;
     const auto& h = history.back();
@@ -313,7 +345,7 @@ void Board::undoMove() {
 }
 
 bool Board::isLegalMove(const Move& m, PieceColor color) const {
-    auto moves = generateAllMoves(color);
+    auto moves = generateAllLegalMoves(color);
     for (const auto& move : moves)
         if (move.from == m.from && move.to == m.to && move.promoPiece == m.promoPiece)
             return true;
@@ -322,17 +354,19 @@ bool Board::isLegalMove(const Move& m, PieceColor color) const {
 
 bool Board::isCheck(PieceColor color) const {
     int kingSq = findKing(color);
+    if (kingSq == -1) {
+        std::cerr << "KRÓL KOLORU " << color << " NIE ISTNIEJE NA PLANSZY! To powa¿ny b³¹d!" << std::endl;
+        return false;
+    }
     PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    auto moves = generateAllMoves(enemy);
-    for (const auto& m : moves)
-        if (m.to == kingSq)
-            return true;
-    return false;
+    return isSquareAttacked(kingSq, enemy);
 }
+
+
 
 bool Board::isCheckmate(PieceColor color) const {
     if (!isCheck(color)) return false;
-    auto moves = generateAllMoves(color);
+    auto moves = generateAllLegalMoves(color);
     Board tmp = *this;
     for (const auto& m : moves) {
         tmp = *this;
@@ -344,7 +378,7 @@ bool Board::isCheckmate(PieceColor color) const {
 
 bool Board::isStalemate(PieceColor color) const {
     if (isCheck(color)) return false;
-    auto moves = generateAllMoves(color);
+    auto moves = generateAllLegalMoves(color);
     Board tmp = *this;
     for (const auto& m : moves) {
         tmp = *this;
@@ -352,6 +386,47 @@ bool Board::isStalemate(PieceColor color) const {
         if (!tmp.isCheck(color)) return false;
     }
     return moves.empty();
+}
+bool Board::isSquareAttacked(int sq, PieceColor byColor) const {
+
+    Bitboard pawns = pieces[byColor][PAWN];
+    Bitboard attacks;
+    if (byColor == WHITE) {
+        attacks = ((pawns << 7) & ~0x8080808080808080ULL) | ((pawns << 9) & ~0x0101010101010101ULL);
+    }
+    else {
+        attacks = ((pawns >> 7) & ~0x0101010101010101ULL) | ((pawns >> 9) & ~0x8080808080808080ULL);
+    }
+    if (attacks & (1ULL << sq)) return true;
+
+    Bitboard knights = pieces[byColor][KNIGHT];
+    while (knights) {
+        int from = bit_scan_forward(knights);
+        if (knight_attacks[from] & (1ULL << sq)) return true;
+        knights &= knights - 1;
+    }
+
+    Bitboard bishops = pieces[byColor][BISHOP] | pieces[byColor][QUEEN];
+    while (bishops) {
+        int from = bit_scan_forward(bishops);
+        if (bishop_attacks(from, *this) & (1ULL << sq)) return true;
+        bishops &= bishops - 1;
+    }
+
+    Bitboard rooks = pieces[byColor][ROOK] | pieces[byColor][QUEEN];
+    while (rooks) {
+        int from = bit_scan_forward(rooks);
+        if (rook_attacks(from, *this) & (1ULL << sq)) return true;
+        rooks &= rooks - 1;
+    }
+
+    Bitboard king = pieces[byColor][KING];
+    if (king) {
+        int from = bit_scan_forward(king);
+        if (king_attacks[from] & (1ULL << sq)) return true;
+    }
+
+    return false;
 }
 
 int Board::findKing(PieceColor color) const {

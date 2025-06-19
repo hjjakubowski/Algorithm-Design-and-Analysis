@@ -3,6 +3,7 @@
 #include "move.hpp"
 #include "AI.hpp"
 #include "test.hpp"
+#include "zorbist.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -12,10 +13,10 @@ enum AiStrength { NEWBIE = 1, CLUB = 2, GRANDMASTER = 3 };
 
 int get_ai_depth(AiStrength level) {
     switch (level) {
-    case NEWBIE: return 5;
-    case CLUB:   return 7;
-    case GRANDMASTER: return 9;
-    default:     return 5;
+    case NEWBIE: return 6;
+    case CLUB:   return 8;
+    case GRANDMASTER: return 16;
+    default:     return 6;
     }
 }
 
@@ -50,7 +51,7 @@ int main() {
     init_knight_attacks();
     init_king_attacks();
     //test_chess_engine();
-    
+    init_zobrist();
 
     std::cout << "Wybierz tryb gry:\n";
     std::cout << "1. Czlowiek vs Czlowiek\n";
@@ -113,6 +114,11 @@ int main() {
             print_move(aiMove);
             std::cout << std::endl;
             board.makeMove(aiMove, turn);
+            if (board.halfmoveClock >= 100) {
+                std::cout << "Remis! (50 ruchow bez bicia)\n";
+                board.print();
+                break;
+            }
             turn = (turn == WHITE) ? BLACK : WHITE;
             board.print();
             continue;
@@ -154,7 +160,7 @@ int main() {
         board.print();
 
         if (board.halfmoveClock >= 100) {
-            std::cout << "Remis! (50 ruchów bez bicia i ruchu pionkiem)\n";
+            std::cout << "Remis! (50 ruchow bez bicia)\n";
             break;
         }
 

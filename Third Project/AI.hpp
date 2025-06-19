@@ -3,6 +3,13 @@
 #include "move.hpp"
 #include <algorithm>
 #include <vector>
+#include <unordered_map>
+
+struct TTEntry {
+    int depth;
+    int value;
+};
+static std::unordered_map<uint64_t, TTEntry> transTable;
 
 extern const int pawn_table[64];
 extern const int knight_table[64];
