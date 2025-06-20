@@ -1,39 +1,20 @@
 #include "board.hpp"
-#include "bitboard_tables.hpp"
-#include "piece.hpp"
 #include <iostream>
-#include <cstring>
+#include <cassert>
 
 Board::Board() { setInitial(); }
 
 void Board::setInitial() {
-    memset(pieces, 0, sizeof(pieces));
-    memset(occupied, 0, sizeof(occupied));
-    all = 0;
-    halfmoveClock = 0;
- 
-
-
-    pieces[WHITE][ROOK] |= (1ULL << sq(0, 0)) | (1ULL << sq(0, 7));
-    pieces[WHITE][KNIGHT] |= (1ULL << sq(0, 1)) | (1ULL << sq(0, 6));
-    pieces[WHITE][BISHOP] |= (1ULL << sq(0, 2)) | (1ULL << sq(0, 5));
-    pieces[WHITE][QUEEN] |= (1ULL << sq(0, 3));
-    pieces[WHITE][KING] |= (1ULL << sq(0, 4));
-    for (int x = 0; x < 8; ++x) pieces[WHITE][PAWN] |= (1ULL << sq(1, x));
-
-    pieces[BLACK][ROOK] |= (1ULL << sq(7, 0)) | (1ULL << sq(7, 7));
-    pieces[BLACK][KNIGHT] |= (1ULL << sq(7, 1)) | (1ULL << sq(7, 6));
-    pieces[BLACK][BISHOP] |= (1ULL << sq(7, 2)) | (1ULL << sq(7, 5));
-    pieces[BLACK][QUEEN] |= (1ULL << sq(7, 3));
-    pieces[BLACK][KING] |= (1ULL << sq(7, 4));
-    for (int x = 0; x < 8; ++x) pieces[BLACK][PAWN] |= (1ULL << sq(6, x));
-
-    for (int c = 0; c < 2; ++c) {
-        occupied[c] = 0;
-        for (int t = 0; t < 6; ++t) occupied[c] |= pieces[c][t];
-        all |= occupied[c];
-    }
+    squares[0] = { makePiece(ROOK, WHITE), makePiece(KNIGHT, WHITE), makePiece(BISHOP, WHITE), makePiece(QUEEN, WHITE),
+                   makePiece(KING, WHITE), makePiece(BISHOP, WHITE), makePiece(KNIGHT, WHITE), makePiece(ROOK, WHITE) };
+    squares[1].fill(makePiece(PAWN, WHITE));
+    for (int y = 2; y < 6; ++y)
+        squares[y].fill(makePiece(NONE, EMPTY));
+    squares[6].fill(makePiece(PAWN, BLACK));
+    squares[7] = { makePiece(ROOK, BLACK), makePiece(KNIGHT, BLACK), makePiece(BISHOP, BLACK), makePiece(QUEEN, BLACK),
+                   makePiece(KING, BLACK), makePiece(BISHOP, BLACK), makePiece(KNIGHT, BLACK), makePiece(ROOK, BLACK) };
     history.clear();
+    halfmoveClock = 0;
 }
 
 void Board::print() const {
@@ -41,446 +22,303 @@ void Board::print() const {
     for (int y = 7; y >= 0; --y) {
         std::cout << y + 1 << " |";
         for (int x = 0; x < 8; ++x) {
-            int sq_idx = sq(y, x);
-            char c = '.';
-            for (int color = 0; color < 2; ++color)
-                for (int pt = 0; pt < 6; ++pt)
-                    if (pieces[color][pt] & (1ULL << sq_idx))
-                        c = pieceToChar((PieceType)pt, (PieceColor)color);
-            std::cout << " " << c;
+            std::cout << " " << pieceToChar(squares[y][x]);
         }
         std::cout << " |\n";
     }
     std::cout << "  +-----------------+\n";
     std::cout << "    a b c d e f g h\n";
-    std::cout << "Liczba polruchow od ostatniego bicia lub ruchu pionkiem: " << halfmoveClock << "\n";
 }
 
-
-inline void push_moves_from_mask(std::vector<Move>& moves, int from, Bitboard mask, const Board& board, PieceColor color, PieceType promo = NONE_TYPE) {
-    Bitboard own = board.occupied[color];
-    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    Bitboard enemyKing = board.pieces[enemy][KING];
-    while (mask) {
-        int to = bit_scan_forward(mask);
-        if (enemyKing & (1ULL << to)) {
-            mask &= mask - 1;
-            continue;
-        }
-        if (!(own & (1ULL << to)))
-            moves.emplace_back(from, to, promo);
-        mask &= mask - 1;
-    }
-}
-
-
-std::vector<Move> pawnMoves(const Board& board, PieceColor color) {
+bool Board::isLegalMove(int fromY, int fromX, int toY, int toX, uint8_t promo) const {
+    PieceColor color = getPieceColor(squares[fromY][fromX]);
+    if (color == EMPTY) return false;
     std::vector<Move> moves;
-    Bitboard pawns = board.pieces[color][PAWN];
-    Bitboard empty = ~board.all;
-    int dir = (color == WHITE) ? 8 : -8;
-    int finalRank = (color == WHITE) ? 7 : 0;
-
-    Bitboard singlePush = (color == WHITE) ? (pawns << 8) : (pawns >> 8);
-    singlePush &= empty;
-    Bitboard pawnsToMove = singlePush;
-    while (pawnsToMove) {
-        int to = bit_scan_forward(pawnsToMove);
-        int from = to - dir;
-        if (rank_of(to) == finalRank) {
-            moves.emplace_back(from, to, QUEEN);
-            moves.emplace_back(from, to, ROOK);
-            moves.emplace_back(from, to, KNIGHT);
-            moves.emplace_back(from, to, BISHOP);
-        }
-        else {
-            moves.emplace_back(from, to);
-        }
-        pawnsToMove &= pawnsToMove - 1;
+    PieceType type = getPieceType(squares[fromY][fromX]);
+    switch (type) {
+    case PAWN:   moves = legalPawnMoves(fromY, fromX); break;
+    case KNIGHT: moves = legalKnightMoves(fromY, fromX); break;
+    case BISHOP: moves = legalBishopMoves(fromY, fromX); break;
+    case ROOK:   moves = legalRookMoves(fromY, fromX); break;
+    case QUEEN:  moves = legalQueenMoves(fromY, fromX); break;
+    case KING:   moves = legalKingMoves(fromY, fromX); break;
+    default:     return false;
     }
 
-    Bitboard doublePush;
-    if (color == WHITE) {
-        doublePush = ((pawns & (0xFFULL << 8)) << 16) & empty & (empty << 8);
-    }
-    else {
-        doublePush = ((pawns & (0xFFULL << 48)) >> 16) & empty & (empty >> 8);
-    }
-    pawnsToMove = doublePush;
-    while (pawnsToMove) {
-        int to = bit_scan_forward(pawnsToMove);
-        int from = to - 2 * dir;
-        moves.emplace_back(from, to);
-        pawnsToMove &= pawnsToMove - 1;
-    }
-
-    Bitboard enemy = board.occupied[!color];
-    Bitboard leftAttack = (color == WHITE) ? (pawns << 7) : (pawns >> 9);
-    Bitboard rightAttack = (color == WHITE) ? (pawns << 9) : (pawns >> 7);
-
-    leftAttack &= enemy & ~0x0101010101010101ULL; 
-    rightAttack &= enemy & ~0x8080808080808080ULL;
-
-    pawnsToMove = leftAttack;
-    while (pawnsToMove) {
-        int to = bit_scan_forward(pawnsToMove);
-        int from = to - ((color == WHITE) ? 7 : -9);
-        if (rank_of(to) == finalRank) {
-            moves.emplace_back(from, to, QUEEN);
-            moves.emplace_back(from, to, ROOK);
-            moves.emplace_back(from, to, KNIGHT);
-            moves.emplace_back(from, to, BISHOP);
-        }
-        else {
-            moves.emplace_back(from, to);
-        }
-        pawnsToMove &= pawnsToMove - 1;
-    }
-    pawnsToMove = rightAttack;
-    while (pawnsToMove) {
-        int to = bit_scan_forward(pawnsToMove);
-        int from = to - ((color == WHITE) ? 9 : -7);
-        if (rank_of(to) == finalRank) {
-            moves.emplace_back(from, to, QUEEN);
-            moves.emplace_back(from, to, ROOK);
-            moves.emplace_back(from, to, KNIGHT);
-            moves.emplace_back(from, to, BISHOP);
-        }
-        else {
-            moves.emplace_back(from, to);
-        }
-        pawnsToMove &= pawnsToMove - 1;
-    }
-    return moves;
-}
-
-
-std::vector<Move> knightMoves(const Board& board, PieceColor color) {
-    std::vector<Move> moves;
-    Bitboard knights = board.pieces[color][KNIGHT];
-    while (knights) {
-        int from = bit_scan_forward(knights);
-        Bitboard mask = knight_attacks[from] & ~board.occupied[color];
-        push_moves_from_mask(moves, from, mask, board, color);
-        knights &= knights - 1;
-    }
-    return moves;
-}
-
-std::vector<Move> kingMoves(const Board& board, PieceColor color) {
-    std::vector<Move> moves;
-    Bitboard king = board.pieces[color][KING];
-    if (!king) return moves;
-    int from = bit_scan_forward(king);
-    Bitboard mask = king_attacks[from] & ~board.occupied[color];
-
-    for (int to = 0; to < 64; ++to) {
-        if (!(mask & (1ULL << to))) continue;
-
-        Board tmp = board;
-        tmp.pieces[color][KING] &= ~(1ULL << from);
-        tmp.occupied[color] &= ~(1ULL << from);
-        tmp.all &= ~(1ULL << from);
-        tmp.pieces[color][KING] |= (1ULL << to);
-        tmp.occupied[color] |= (1ULL << to);
-        tmp.all |= (1ULL << to);
-
-        if (!board.isSquareAttacked(to, (color == WHITE) ? BLACK : WHITE)) {
-            moves.emplace_back(from, to);
-        }
-
-    }
-    return moves;
-}
-
-
-Bitboard bishop_attacks(int from, const Board& board) {
-    Bitboard result = 0;
-    int y = from / 8, x = from % 8;
-    for (int dy = -1; dy <= 1; dy += 2) for (int dx = -1; dx <= 1; dx += 2) {
-        int ny = y + dy, nx = x + dx;
-        while (ny >= 0 && ny < 8 && nx >= 0 && nx < 8) {
-            int to = ny * 8 + nx;
-            result |= (1ULL << to);
-            if (board.all & (1ULL << to)) break;
-            ny += dy; nx += dx;
-        }
-    }
-    return result;
-}
-Bitboard rook_attacks(int from, const Board& board) {
-    Bitboard result = 0;
-    int y = from / 8, x = from % 8;
-    for (int d = -1; d <= 1; d += 2) {
-        int ny = y + d;
-        while (ny >= 0 && ny < 8) {
-            int to = ny * 8 + x;
-            result |= (1ULL << to);
-            if (board.all & (1ULL << to)) break;
-            ny += d;
-        }
-        int nx = x + d;
-        while (nx >= 0 && nx < 8) {
-            int to = y * 8 + nx;
-            result |= (1ULL << to);
-            if (board.all & (1ULL << to)) break;
-            nx += d;
-        }
-    }
-    return result;
-}
-
-std::vector<Move> bishopMoves(const Board& board, PieceColor color) {
-    std::vector<Move> moves;
-    Bitboard bishops = board.pieces[color][BISHOP];
-    while (bishops) {
-        int from = bit_scan_forward(bishops);
-        Bitboard mask = bishop_attacks(from, board) & ~board.occupied[color];
-        push_moves_from_mask(moves, from, mask, board, color);
-        bishops &= bishops - 1;
-    }
-    return moves;
-}
-std::vector<Move> rookMoves(const Board& board, PieceColor color) {
-    std::vector<Move> moves;
-    Bitboard rooks = board.pieces[color][ROOK];
-    while (rooks) {
-        int from = bit_scan_forward(rooks);
-        Bitboard mask = rook_attacks(from, board) & ~board.occupied[color];
-        push_moves_from_mask(moves, from, mask, board, color);
-        rooks &= rooks - 1;
-    }
-    return moves;
-}
-std::vector<Move> queenMoves(const Board& board, PieceColor color) {
-    std::vector<Move> moves;
-    Bitboard queens = board.pieces[color][QUEEN];
-    while (queens) {
-        int from = bit_scan_forward(queens);
-        Bitboard mask = (rook_attacks(from, board) | bishop_attacks(from, board)) & ~board.occupied[color];
-        push_moves_from_mask(moves, from, mask, board, color);
-        queens &= queens - 1;
-    }
-    return moves;
-}
-
-std::vector<Move> Board::generateAllLegalMoves(PieceColor color) const {
-    std::vector<Move> moves, legalMoves;
-    auto pawns = pawnMoves(*this, color); moves.insert(moves.end(), pawns.begin(), pawns.end());
-    auto knights = knightMoves(*this, color); moves.insert(moves.end(), knights.begin(), knights.end());
-    auto bishops = bishopMoves(*this, color); moves.insert(moves.end(), bishops.begin(), bishops.end());
-    auto rooks = rookMoves(*this, color); moves.insert(moves.end(), rooks.begin(), rooks.end());
-    auto queens = queenMoves(*this, color); moves.insert(moves.end(), queens.begin(), queens.end());
-    auto kings = kingMoves(*this, color); moves.insert(moves.end(), kings.begin(), kings.end());
     for (const auto& m : moves) {
-        Board tmp = *this;
-        tmp.makeMove(m, color);
-        if (!tmp.isCheck(color))
-            legalMoves.push_back(m);
-    }
-    return legalMoves;
-}
-
-
-bool Board::makeMove(const Move& m, PieceColor color) {
-    HistoryEntry h;
-    memcpy(h.pieces, pieces, sizeof(pieces));
-    memcpy(h.occupied, occupied, sizeof(occupied));
-    h.all = all;
-    h.move = m;
-    h.halfmoveClock = halfmoveClock;
-
-
-    history.push_back(h);
-
-    bool isPawnMove = (pieces[color][PAWN] & (1ULL << m.from));
-    bool isCapture = false;
-    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    for (int t = 0; t < 6; ++t) {
-        if (pieces[enemy][t] & (1ULL << m.to)) {
-            isCapture = true;
-            break;
-        }
-    }
-
-    for (int t = 0; t < 6; ++t)
-        for (int c = 0; c < 2; ++c)
-            pieces[c][t] &= ~(1ULL << m.to);
-
-    if (m.promoPiece != NONE_TYPE && pieces[color][PAWN] & (1ULL << m.from)) {
-        pieces[color][PAWN] &= ~(1ULL << m.from);
-        pieces[color][m.promoPiece] |= (1ULL << m.to);
-    }
-    else {
-        for (int t = 0; t < 6; ++t) {
-            if (pieces[color][t] & (1ULL << m.from)) {
-                pieces[color][t] &= ~(1ULL << m.from);
-                pieces[color][t] |= (1ULL << m.to);
-                break;
-            }
-        }
-    }
-
-    for (int c = 0; c < 2; ++c) {
-        occupied[c] = 0;
-        for (int t = 0; t < 6; ++t)
-            occupied[c] |= pieces[c][t];
-    }
-    all = occupied[WHITE] | occupied[BLACK];
-
-    if (isPawnMove || isCapture)
-        halfmoveClock = 0;
-    else
-        halfmoveClock++;
-
-    return true;
-}
-
-
-void Board::undoMove() {
-    if (history.empty()) return;
-    const auto& h = history.back();
-    memcpy(pieces, h.pieces, sizeof(pieces));
-    memcpy(occupied, h.occupied, sizeof(occupied));
-    all = h.all;
-    halfmoveClock = h.halfmoveClock; 
-    history.pop_back();
-
-
-}
-
-bool Board::isLegalMove(const Move& m, PieceColor color) const {
-    auto moves = generateAllLegalMoves(color);
-    for (const auto& move : moves)
-        if (move.from == m.from && move.to == m.to && move.promoPiece == m.promoPiece)
+        if (m.toY == toY && m.toX == toX && m.fromY == fromY && m.fromX == fromX &&
+            (type != PAWN || m.promoPiece == promo))
             return true;
+    }
+
     return false;
 }
 
-bool Board::isCheck(PieceColor color) const {
-    int kingSq = findKing(color);
-    if (kingSq == -1) {
-        std::cerr << "KRÓL KOLORU " << color << " NIE ISTNIEJE NA PLANSZY! To powa¿ny b³¹d!" << std::endl;
-        return false;
+bool Board::makeMove(int fromY, int fromX, int toY, int toX, uint8_t promo) {
+    uint8_t piece = squares[fromY][fromX];
+    uint8_t captured = squares[toY][toX];
+    history.push_back({ squares, Move(fromY, fromX, toY, toX, promo), halfmoveClock });
+
+    // Regu³a 50 ruchów: jeœli ruch pionkiem lub bicie, resetuj licznik, w przeciwnym razie inkrementuj
+    if (getPieceType(piece) == PAWN || captured != NONE) {
+        halfmoveClock = 0;
     }
-    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    return isSquareAttacked(kingSq, enemy);
+    else {
+        halfmoveClock++;
+    }
+
+    squares[toY][toX] = piece;
+    squares[fromY][fromX] = NONE;
+
+    if (getPieceType(piece) == PAWN && (toY == 0 || toY == 7)) {
+        squares[toY][toX] = makePiece(static_cast<PieceType>(promo), getPieceColor(piece));
+    }
+    return true;
 }
 
+void Board::undoMove() {
+    if (history.empty()) return;
+    squares = history.back().state;
+    halfmoveClock = history.back().halfmoveClock;
+    history.pop_back();
+}
 
+std::pair<int, int> Board::findKing(PieceColor color) const {
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+            if (getPieceType(squares[y][x]) == KING && getPieceColor(squares[y][x]) == color)
+                return { y, x };
+    return { -1, -1 };
+}
+
+bool Board::isCheck(PieceColor color) const {
+    auto [ky, kx] = findKing(color);
+    if (ky == -1) return false;
+    PieceColor enemy = (color == WHITE ? BLACK : WHITE);
+    auto moves = generateAllMoves(enemy);
+    for (const auto& m : moves)
+        if (m.toY == ky && m.toX == kx) return true;
+    return false;
+}
 
 bool Board::isCheckmate(PieceColor color) const {
     if (!isCheck(color)) return false;
-    auto moves = generateAllLegalMoves(color);
-    Board tmp = *this;
+    auto moves = generateAllMoves(color);
     for (const auto& m : moves) {
-        tmp = *this;
-        tmp.makeMove(m, color);
-        if (!tmp.isCheck(color)) return false;
+        const_cast<Board*>(this)->makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+        bool notCheck = !isCheck(color);
+        const_cast<Board*>(this)->undoMove();
+        if (notCheck) return false;
     }
     return true;
 }
 
 bool Board::isStalemate(PieceColor color) const {
     if (isCheck(color)) return false;
-    auto moves = generateAllLegalMoves(color);
-    Board tmp = *this;
+    auto moves = generateAllMoves(color);
     for (const auto& m : moves) {
-        tmp = *this;
-        tmp.makeMove(m, color);
-        if (!tmp.isCheck(color)) return false;
+        const_cast<Board*>(this)->makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+        bool notCheck = !isCheck(color);
+        const_cast<Board*>(this)->undoMove();
+        if (notCheck) return false;
     }
-    return moves.empty();
+    return true;
 }
-bool Board::isSquareAttacked(int sq, PieceColor byColor) const {
 
-    Bitboard pawns = pieces[byColor][PAWN];
-    Bitboard attacks;
-    if (byColor == WHITE) {
-        attacks = ((pawns << 7) & ~0x8080808080808080ULL) | ((pawns << 9) & ~0x0101010101010101ULL);
-    }
-    else {
-        attacks = ((pawns >> 7) & ~0x0101010101010101ULL) | ((pawns >> 9) & ~0x8080808080808080ULL);
-    }
-    if (attacks & (1ULL << sq)) return true;
+// --- Nowe regu³y remisu ---
 
-    Bitboard knights = pieces[byColor][KNIGHT];
-    while (knights) {
-        int from = bit_scan_forward(knights);
-        if (knight_attacks[from] & (1ULL << sq)) return true;
-        knights &= knights - 1;
-    }
+bool Board::isDrawBy50MoveRule() const {
+    return halfmoveClock >= 100;
+}
 
-    Bitboard bishops = pieces[byColor][BISHOP] | pieces[byColor][QUEEN];
-    while (bishops) {
-        int from = bit_scan_forward(bishops);
-        if (bishop_attacks(from, *this) & (1ULL << sq)) return true;
-        bishops &= bishops - 1;
+bool Board::isInsufficientMaterial() const {
+    int whiteBishops = 0, blackBishops = 0, whiteKnights = 0, blackKnights = 0;
+    int whiteOther = 0, blackOther = 0;
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            uint8_t piece = squares[y][x];
+            PieceType type = getPieceType(piece);
+            PieceColor color = getPieceColor(piece);
+            if (type == NONE) continue;
+            if (type == KING) continue;
+            if (type == BISHOP) { (color == WHITE ? whiteBishops : blackBishops)++; continue; }
+            if (type == KNIGHT) { (color == WHITE ? whiteKnights : blackKnights)++; continue; }
+            if (color == WHITE) whiteOther++;
+            else if (color == BLACK) blackOther++;
+        }
     }
-
-    Bitboard rooks = pieces[byColor][ROOK] | pieces[byColor][QUEEN];
-    while (rooks) {
-        int from = bit_scan_forward(rooks);
-        if (rook_attacks(from, *this) & (1ULL << sq)) return true;
-        rooks &= rooks - 1;
-    }
-
-    Bitboard king = pieces[byColor][KING];
-    if (king) {
-        int from = bit_scan_forward(king);
-        if (king_attacks[from] & (1ULL << sq)) return true;
-    }
-
+    // Król vs Król
+    if (whiteBishops == 0 && blackBishops == 0 && whiteKnights == 0 && blackKnights == 0 && whiteOther == 0 && blackOther == 0)
+        return true;
+    // Król + lekka figura vs król
+    if ((whiteBishops == 1 && whiteKnights == 0 && whiteOther == 0 && blackBishops == 0 && blackKnights == 0 && blackOther == 0) ||
+        (blackBishops == 1 && blackKnights == 0 && blackOther == 0 && whiteBishops == 0 && whiteKnights == 0 && whiteOther == 0) ||
+        (whiteKnights == 1 && whiteBishops == 0 && whiteOther == 0 && blackBishops == 0 && blackKnights == 0 && blackOther == 0) ||
+        (blackKnights == 1 && blackBishops == 0 && blackOther == 0 && whiteBishops == 0 && whiteKnights == 0 && whiteOther == 0))
+        return true;
+    // Król + skoczek vs król + skoczek
+    if (whiteKnights == 1 && blackKnights == 1 && whiteBishops == 0 && blackBishops == 0 && whiteOther == 0 && blackOther == 0)
+        return true;
     return false;
 }
 
+// --- Generowanie ruchów ---
 
-bool Board::isInsufficientMaterial() const {
- 
-    int white_pieces = 0, black_pieces = 0;
-    int white_bishops = 0, white_knights = 0;
-    int black_bishops = 0, black_knights = 0;
+std::vector<Move> Board::legalPawnMoves(int y, int x) const {
+    std::vector<Move> moves;
+    uint8_t piece = squares[y][x];
+    PieceColor color = getPieceColor(piece);
+    int direction = (color == WHITE) ? 1 : -1;
+    int startRow = (color == WHITE) ? 1 : 6;
+    int promoteRow = (color == WHITE) ? 7 : 0;
+    int ny = y + direction;
 
-    for (int sq = 0; sq < 64; ++sq) {
-        for (int color = 0; color < 2; ++color) {
-            for (int pt = 0; pt < 6; ++pt) {
-                if (pt == KING) continue;
-                if (pieces[color][pt] & (1ULL << sq)) {
-                    if (color == WHITE) white_pieces++;
-                    else black_pieces++;
-                    if (pt == BISHOP) {
-                        if (color == WHITE) white_bishops++;
-                        else black_bishops++;
+    // Proste ruchy do przodu
+    if (ny >= 0 && ny < 8) {
+        if (squares[ny][x] == NONE) {
+            if (ny == promoteRow) {
+                moves.emplace_back(y, x, ny, x, QUEEN);
+                moves.emplace_back(y, x, ny, x, ROOK);
+                moves.emplace_back(y, x, ny, x, KNIGHT);
+                moves.emplace_back(y, x, ny, x, BISHOP);
+            }
+            else {
+                moves.emplace_back(y, x, ny, x);
+            }
+            // Podwójny ruch z pierwszego pola 
+            if (y == startRow && squares[y + direction][x] == NONE && squares[y + 2 * direction][x] == NONE) {
+                moves.emplace_back(y, x, y + 2 * direction, x);
+            }
+        }
+        // Bicia
+        for (int dx = -1; dx <= 1; dx += 2) {
+            int nx = x + dx;
+            if (nx >= 0 && nx < 8) {
+                uint8_t target = squares[ny][nx];
+                if (target != NONE && getPieceColor(target) != color) {
+                    if (ny == promoteRow) {
+                        moves.emplace_back(y, x, ny, nx, QUEEN);
+                        moves.emplace_back(y, x, ny, nx, ROOK);
+                        moves.emplace_back(y, x, ny, nx, KNIGHT);
+                        moves.emplace_back(y, x, ny, nx, BISHOP);
                     }
-                    if (pt == KNIGHT) {
-                        if (color == WHITE) white_knights++;
-                        else black_knights++;
+                    else {
+                        moves.emplace_back(y, x, ny, nx);
                     }
                 }
             }
         }
     }
-
-   
-    if (white_pieces == 0 && black_pieces == 0) return true;
-
-    if ((white_pieces == 1 && white_knights == 1 && black_pieces == 0) ||
-        (black_pieces == 1 && black_knights == 1 && white_pieces == 0)) return true;
-
-    if ((white_pieces == 1 && white_bishops == 1 && black_pieces == 0) ||
-        (black_pieces == 1 && black_bishops == 1 && white_pieces == 0)) return true;
-
-    if (white_pieces == 1 && white_bishops == 1 &&
-        black_pieces == 1 && black_bishops == 1) {
-
-        return true;
-    }
-
-    return false;
+    return moves;
 }
 
-int Board::findKing(PieceColor color) const {
-    Bitboard bb = pieces[color][KING];
-    if (bb) return bit_scan_forward(bb);
-    return -1;
+std::vector<Move> Board::legalKnightMoves(int y, int x) const {
+    std::vector<Move> moves;
+    static const int dy[8] = { -2, -1, 1, 2, 2, 1, -1, -2 };
+    static const int dx[8] = { 1, 2, 2, 1, -1, -2, -2, -1 };
+    PieceColor color = getPieceColor(squares[y][x]);
+    for (int d = 0; d < 8; ++d) {
+        int ny = y + dy[d], nx = x + dx[d];
+        if (ny >= 0 && ny < 8 && nx >= 0 && nx < 8) {
+            uint8_t target = squares[ny][nx];
+            if (target == NONE || getPieceColor(target) != color) {
+                moves.emplace_back(y, x, ny, nx);
+            }
+        }
+    }
+    return moves;
+}
+
+std::vector<Move> Board::legalBishopMoves(int y, int x) const {
+    std::vector<Move> moves;
+    PieceColor color = getPieceColor(squares[y][x]);
+    static const int dirs[4][2] = { {1,1},{1,-1},{-1,1},{-1,-1} };
+    for (auto& d : dirs) {
+        int ny = y, nx = x;
+        while (true) {
+            ny += d[0]; nx += d[1];
+            if (ny < 0 || ny >= 8 || nx < 0 || nx >= 8) break;
+            uint8_t target = squares[ny][nx];
+            if (target == NONE) {
+                moves.emplace_back(y, x, ny, nx);
+            }
+            else {
+                if (getPieceColor(target) != color)
+                    moves.emplace_back(y, x, ny, nx);
+                break;
+            }
+        }
+    }
+    return moves;
+}
+
+std::vector<Move> Board::legalRookMoves(int y, int x) const {
+    std::vector<Move> moves;
+    PieceColor color = getPieceColor(squares[y][x]);
+    static const int dirs[4][2] = { {1,0},{-1,0},{0,1},{0,-1} };
+    for (auto& d : dirs) {
+        int ny = y, nx = x;
+        while (true) {
+            ny += d[0]; nx += d[1];
+            if (ny < 0 || ny >= 8 || nx < 0 || nx >= 8) break;
+            uint8_t target = squares[ny][nx];
+            if (target == NONE) {
+                moves.emplace_back(y, x, ny, nx);
+            }
+            else {
+                if (getPieceColor(target) != color)
+                    moves.emplace_back(y, x, ny, nx);
+                break;
+            }
+        }
+    }
+    return moves;
+}
+
+std::vector<Move> Board::legalQueenMoves(int y, int x) const {
+    std::vector<Move> moves;
+    auto b = legalBishopMoves(y, x);
+    auto r = legalRookMoves(y, x);
+    moves.insert(moves.end(), b.begin(), b.end());
+    moves.insert(moves.end(), r.begin(), r.end());
+    return moves;
+}
+
+std::vector<Move> Board::legalKingMoves(int y, int x) const {
+    std::vector<Move> moves;
+    PieceColor color = getPieceColor(squares[y][x]);
+    static const int dirs[8][2] = {
+        {1,0},{-1,0},{0,1},{0,-1},
+        {1,1},{1,-1},{-1,1},{-1,-1}
+    };
+    for (auto& d : dirs) {
+        int ny = y + d[0], nx = x + d[1];
+        if (ny >= 0 && ny < 8 && nx >= 0 && nx < 8) {
+            uint8_t target = squares[ny][nx];
+            if (target == NONE || getPieceColor(target) != color)
+                moves.emplace_back(y, x, ny, nx);
+        }
+    }
+    return moves;
+}
+
+std::vector<Move> Board::generateAllMoves(PieceColor color) const {
+    std::vector<Move> moves;
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+            if (getPieceColor(squares[y][x]) == color) {
+                PieceType type = getPieceType(squares[y][x]);
+                std::vector<Move> figMoves;
+                switch (type) {
+                case PAWN:   figMoves = legalPawnMoves(y, x); break;
+                case KNIGHT: figMoves = legalKnightMoves(y, x); break;
+                case BISHOP: figMoves = legalBishopMoves(y, x); break;
+                case ROOK:   figMoves = legalRookMoves(y, x); break;
+                case QUEEN:  figMoves = legalQueenMoves(y, x); break;
+                case KING:   figMoves = legalKingMoves(y, x); break;
+                default: break;
+                }
+                moves.insert(moves.end(), figMoves.begin(), figMoves.end());
+            }
+    return moves;
 }

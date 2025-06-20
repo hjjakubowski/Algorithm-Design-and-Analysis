@@ -1,22 +1,19 @@
 ﻿#include "board.hpp"
-#include "bitboard_tables.hpp"
 #include "move.hpp"
 #include "AI.hpp"
-#include "test.hpp"
-#include "zorbist.hpp"
 #include <iostream>
 #include <string>
-#include <vector>
+#include "test.hpp"
 
 enum GameMode { HUMAN_VS_HUMAN = 1, HUMAN_VS_AI = 2, AI_VS_AI = 3 };
 enum AiStrength { NEWBIE = 1, CLUB = 2, GRANDMASTER = 3 };
 
 int get_ai_depth(AiStrength level) {
     switch (level) {
-    case NEWBIE: return 2;
-    case CLUB:   return 8;
-    case GRANDMASTER: return 16;
-    default:     return 2;
+    case NEWBIE: return 4;
+    case CLUB:   return 5;
+    case GRANDMASTER: return 6;
+    default:     return 4;
     }
 }
 
@@ -29,37 +26,15 @@ std::string ai_name(AiStrength level) {
     }
 }
 
-void print_move(const Move& move) {
-    char fromX = 'a' + (move.from % 8);
-    char fromY = '1' + (move.from / 8);
-    char toX = 'a' + (move.to % 8);
-    char toY = '1' + (move.to / 8);
-
-    std::cout << fromX << fromY << toX << toY;
-    if (move.promoPiece != NONE_TYPE) {
-        switch (move.promoPiece) {
-        case QUEEN:  std::cout << "q"; break;
-        case ROOK:   std::cout << "r"; break;
-        case KNIGHT: std::cout << "n"; break;
-        case BISHOP: std::cout << "b"; break;
-        default: break;
-        }
-    }
-}
-
 int main() {
-    init_knight_attacks();
-    init_king_attacks();
-    //test_chess_engine();
+    test_chess_engine();
     init_zobrist();
-    transTable.clear();
-
     std::cout << "Wybierz tryb gry:\n";
     std::cout << "1. Czlowiek vs Czlowiek\n";
     std::cout << "2. Czlowiek vs Komputer\n";
     std::cout << "3. Komputer vs Komputer\n";
     std::cout << "Twoj wybor: ";
-
+    
     int mode_choice = 1;
     std::cin >> mode_choice;
 
@@ -81,25 +56,14 @@ int main() {
         black_depth = get_ai_depth(static_cast<AiStrength>(black_ai));
         std::cout << "Wybrano: Biale: " << ai_name(static_cast<AiStrength>(white_ai))
             << " | Czarne: " << ai_name(static_cast<AiStrength>(black_ai)) << "\n";
-    }
-    std::cout << "\n";
+    }std::cout << "\n";
 
     Board board;
     PieceColor turn = WHITE;
-    board.setInitial();
     board.print();
+    
 
     while (true) {
-        if (board.isInsufficientMaterial()) {
-			std::cout << "Remis! Brak mozliwosci zamatowania przeciwnika.\n";
-			break;
-        }
-        if (board.halfmoveClock >= 100) {
-            std::cout << "Remis! (50 ruchow bez bicia)\n";
-            board.print();
-            break;
-        }
-
         if (board.isCheckmate(turn)) {
             std::cout << "Mat! " << (turn == WHITE ? "Czarne" : "Biale") << " wygrywaja.\n";
             break;
@@ -108,30 +72,40 @@ int main() {
             std::cout << "Pat! Remis.\n";
             break;
         }
+        if (board.isDrawBy50MoveRule()) {
+            std::cout << "Remis! 50 ruchow bez bicia lub ruchu pionkiem.\n";
+            break;
+        }
+        if (board.isInsufficientMaterial()) {
+            std::cout << "Remis! Za mało materiału do mata.\n";
+            break;
+        }
+
         if (board.isCheck(turn)) {
             std::cout << "Szach!\n";
         }
 
-        // AI vs AI lub AI (czarne) vs Człowiek
+        // Tryb AI vs AI
         if (mode_choice == AI_VS_AI ||
             (mode_choice == HUMAN_VS_AI && turn == BLACK)) {
             int ai_depth = (turn == WHITE) ? white_depth : black_depth;
             Move aiMove = get_best_move_AI(board, ai_depth, turn);
-            if (aiMove.from == aiMove.to && aiMove.promoPiece == NONE_TYPE) {
+            if (aiMove.fromY == aiMove.toY && aiMove.fromX == aiMove.toX && aiMove.promoPiece == 0) {
                 std::cout << "AI nie widzi ruchu.\n";
                 break;
             }
-            std::cout << (turn == WHITE ? "Biale" : "Czarne") << " AI wybralo ruch: ";
-            print_move(aiMove);
-            std::cout << std::endl;
-            board.makeMove(aiMove, turn);
-            
+            std::cout << (turn == WHITE ? "Biale" : "Czarne") << " AI wybralo ruch: "
+                << char('a' + aiMove.fromX) << (aiMove.fromY + 1)
+                << char('a' + aiMove.toX) << (aiMove.toY + 1)
+                << (aiMove.promoPiece == QUEEN ? "h" : aiMove.promoPiece == ROOK ? "w" : aiMove.promoPiece == KNIGHT ? "g" : aiMove.promoPiece == BISHOP ? "s" : "")
+                << std::endl;
+            board.makeMove(aiMove.fromY, aiMove.fromX, aiMove.toY, aiMove.toX, aiMove.promoPiece);
             turn = (turn == WHITE) ? BLACK : WHITE;
             board.print();
             continue;
         }
 
-        // Człowiek vs Człowiek lub białe w Człowiek vs AI
+        // Tryb Człowiek vs Człowiek oraz białe w Człowiek vs AI
         std::cout << ((turn == WHITE) ? "Biale" : "Czarne") << " podaj ruch (np. e2e4 lub undo): ";
         std::string input;
         std::cin >> input;
@@ -152,25 +126,43 @@ int main() {
         }
 
         Move move = Move::fromString(input);
-        if (move.from < 0 || move.from > 63 || move.to < 0 || move.to > 63) {
+        if (move.fromY < 0 || move.fromY > 7 || move.fromX < 0 || move.fromX > 7 ||
+            move.toY < 0 || move.toY > 7 || move.toX < 0 || move.toX > 7) {
             std::cout << "Niepoprawne pole!\n";
             continue;
         }
+        if (getPieceType(board.squares[move.fromY][move.fromX]) == PAWN) {
+            std::cout << "Legalne ruchy pionka z " << char('a' + move.fromX) << (move.fromY + 1) << ": ";
+            auto moves = board.legalPawnMoves(move.fromY, move.fromX);
+            for (auto& m : moves) {
+                std::cout << char('a' + m.toX) << (m.toY + 1) << " ";
+            }
+            std::cout << std::endl;
+        }
 
-        if (!board.isLegalMove(move, turn)) {
+        uint8_t srcPiece = board.squares[move.fromY][move.fromX];
+        if (getPieceColor(srcPiece) != turn) {
+            std::cout << "To nie twoja figura!\n";
+            continue;
+        }
+
+        if (!board.isLegalMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece)) {
             std::cout << "Nielegalny ruch!\n";
             continue;
         }
 
-        board.makeMove(move, turn);
+        board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
+        if (board.isCheck(turn)) {
+            std::cout << "Nie mozna zostawic swojego krola pod szachem!\n";
+            board.undoMove();
+            continue;
+        }
+        board.undoMove();
+
+
+        board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
         turn = (turn == WHITE) ? BLACK : WHITE;
         board.print();
-
-        if (board.halfmoveClock >= 100) {
-            std::cout << "Remis! (50 ruchow bez bicia)\n";
-            break;
-        }
-
     }
 
     return 0;

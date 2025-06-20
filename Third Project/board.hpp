@@ -1,23 +1,21 @@
 #pragma once
-#include "piece.hpp"
-#include "move.hpp"
 #include <array>
 #include <vector>
-#include <cstdint>
+#include <utility>
+#include "piece.hpp"
+#include "move.hpp"
 
-struct Board {
-    Bitboard pieces[2][6];
-    Bitboard occupied[2];
-    Bitboard all;
+class Board {
+public:
+    std::array<std::array<uint8_t, 8>, 8> squares;
+
+    // Licznik pó³ruchów (do regu³y 50 ruchów)
     int halfmoveClock = 0;
 
     struct HistoryEntry {
-        Bitboard pieces[2][6];
-        Bitboard occupied[2];
-        Bitboard all;
+        std::array<std::array<uint8_t, 8>, 8> state;
         Move move;
         int halfmoveClock;
-
     };
     std::vector<HistoryEntry> history;
 
@@ -25,16 +23,24 @@ struct Board {
     void setInitial();
     void print() const;
 
-    bool isLegalMove(const Move& m, PieceColor color) const;
-    bool makeMove(const Move& m, PieceColor color);
+    bool isLegalMove(int fromY, int fromX, int toY, int toX, uint8_t promo = 0) const;
+    bool makeMove(int fromY, int fromX, int toY, int toX, uint8_t promo = 0);
     void undoMove();
 
     bool isCheck(PieceColor color) const;
     bool isCheckmate(PieceColor color) const;
     bool isStalemate(PieceColor color) const;
-    bool isSquareAttacked(int sq, PieceColor byColor) const;
 
-    std::vector<Move> generateAllLegalMoves(PieceColor color) const;
+    std::vector<Move> legalPawnMoves(int y, int x) const;
+    std::vector<Move> legalKnightMoves(int y, int x) const;
+    std::vector<Move> legalBishopMoves(int y, int x) const;
+    std::vector<Move> legalRookMoves(int y, int x) const;
+    std::vector<Move> legalQueenMoves(int y, int x) const;
+    std::vector<Move> legalKingMoves(int y, int x) const;
+
+    std::vector<Move> generateAllMoves(PieceColor color) const;
+    std::pair<int, int> findKing(PieceColor color) const;
+
+    bool isDrawBy50MoveRule() const;
     bool isInsufficientMaterial() const;
-    int findKing(PieceColor color) const;
 };

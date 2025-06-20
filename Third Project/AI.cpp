@@ -1,75 +1,123 @@
 #include "AI.hpp"
-#include "zorbist.hpp"
 #include <algorithm>
+#include <ctime>
+#include <unordered_map>
+#include <random>
+#include <set>
 #include <vector>
 
+const int pawn_table[8][8] = {
+    {   0,   0,   0,   0,   0,   0,   0,   0 },
+    {  50,  50,  50,  50,  50,  50,  50,  50 },
+    {  10,  10,  20,  30,  30,  20,  10,  10 },
+    {   5,   5,  10,  25,  25,  10,   5,   5 },
+    {   0,   0,   0,  20,  20,   0,   0,   0 },
+    {   5,  -5, -10,   0,   0, -10,  -5,   5 },
+    {   5,  10,  10, -20, -20,  10,  10,   5 },
+    {   0,   0,   0,   0,   0,   0,   0,   0 }
+};
+
+const int knight_table[8][8] = {
+    { -50, -40, -30, -30, -30, -30, -40, -50 },
+    { -40, -20,   0,   5,   5,   0, -20, -40 },
+    { -30,   5,  10,  15,  15,  10,   5, -30 },
+    { -30,   0,  15,  20,  20,  15,   0, -30 },
+    { -30,   5,  15,  20,  20,  15,   5, -30 },
+    { -30,   0,  10,  15,  15,  10,   0, -30 },
+    { -40, -20,   0,   0,   0,   0, -20, -40 },
+    { -50, -40, -30, -30, -30, -30, -40, -50 }
+};
+
+const int bishop_table[8][8] = {
+    { -20, -10, -10, -10, -10, -10, -10, -20 },
+    { -10,   5,   0,   0,   0,   0,   5, -10 },
+    { -10,  10,  10,  10,  10,  10,  10, -10 },
+    { -10,   0,  10,  10,  10,  10,   0, -10 },
+    { -10,   5,   5,  10,  10,   5,   5, -10 },
+    { -10,   0,   5,  10,  10,   5,   0, -10 },
+    { -10,   0,   0,   0,   0,   0,   0, -10 },
+    { -20, -10, -10, -10, -10, -10, -10, -20 }
+};
+
+const int rook_table[8][8] = {
+    {   0,   0,   0,   5,   5,   0,   0,   0 },
+    {  -5,   0,   0,   0,   0,   0,   0,  -5 },
+    {  -5,   0,   0,   0,   0,   0,   0,  -5 },
+    {  -5,   0,   0,   0,   0,   0,   0,  -5 },
+    {  -5,   0,   0,   0,   0,   0,   0,  -5 },
+    {  -5,   0,   0,   0,   0,   0,   0,  -5 },
+    {   5,  10,  10,  10,  10,  10,  10,   5 },
+    {   0,   0,   0,   0,   0,   0,   0,   0 }
+};
+
+const int queen_table[8][8] = {
+    { -20, -10, -10,  -5,  -5, -10, -10, -20 },
+    { -10,   0,   0,   0,   0,   0,   0, -10 },
+    { -10,   0,   5,   5,   5,   5,   0, -10 },
+    {  -5,   0,   5,   5,   5,   5,   0,  -5 },
+    {   0,   0,   5,   5,   5,   5,   0,  -5 },
+    { -10,   5,   5,   5,   5,   5,   0, -10 },
+    { -10,   0,   5,   0,   0,   0,   0, -10 },
+    { -20, -10, -10,  -5,  -5, -10, -10, -20 }
+};
+
+const int king_table[8][8] = {
+    { -30, -40, -40, -50, -50, -40, -40, -30 },
+    { -30, -40, -40, -50, -50, -40, -40, -30 },
+    { -30, -40, -40, -50, -50, -40, -40, -30 },
+    { -30, -40, -40, -50, -50, -40, -40, -30 },
+    { -20, -30, -30, -40, -40, -30, -30, -20 },
+    { -10, -20, -20, -20, -20, -20, -20, -10 },
+    {  20,  20,   0,   0,   0,   0,  20,  20 },
+    {  20,  30,  10,   0,   0,  10,  30,  20 }
+};
+
 std::unordered_map<uint64_t, TransTableEntry> transTable;
+std::mt19937 rng_engine(std::random_device{}());
+uint64_t zobrist_table[8][8][13]; // [y][x][figure]
+std::unordered_map<uint64_t, int> positionCounts;
 
-const int pawn_table[64] = {
-      0,  0,  0,  0,  0,  0,  0,  0,
-     50, 50, 50, 50, 50, 50, 50, 50,
-     10, 10, 20, 30, 30, 20, 10, 10,
-      5,  5, 10, 25, 25, 10,  5,  5,
-      0,  0,  0, 20, 20,  0,  0,  0,
-      5, -5,-10,  0,  0,-10, -5,  5,
-      5, 10, 10,-20,-20, 10, 10,  5,
-      0,  0,  0,  0,  0,  0,  0,  0
-};
+// --- Hashowanie i wartoœci ---
+void init_zobrist() {
+    static bool initialized = false;
+    if (initialized) return;
+    std::mt19937_64 rng(42); // Sta³y seed
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+            for (int p = 0; p < 13; ++p)
+                zobrist_table[y][x][p] = rng();
+    initialized = true;
+}
 
-const int knight_table[64] = {
-   -50,-40,-30,-30,-30,-30,-40,-50,
-   -40,-20,  0,  5,  5,  0,-20,-40,
-   -30,  5, 10, 15, 15, 10,  5,-30,
-   -30,  0, 15, 20, 20, 15,  0,-30,
-   -30,  5, 15, 20, 20, 15,  5,-30,
-   -30,  0, 10, 15, 15, 10,  0,-30,
-   -40,-20,  0,  0,  0,  0,-20,-40,
-   -50,-40,-30,-30,-30,-30,-40,-50
-};
+int piece_index(uint8_t piece) {
+    PieceType type = getPieceType(piece);
+    PieceColor color = getPieceColor(piece);
+    if (type == NONE) return 0;
+    int base = 0;
+    switch (type) {
+    case PAWN: base = 1; break;
+    case KNIGHT: base = 2; break;
+    case BISHOP: base = 3; break;
+    case ROOK: base = 4; break;
+    case QUEEN: base = 5; break;
+    case KING: base = 6; break;
+    default: base = 0;
+    }
+    if (color == WHITE) return base;
+    if (color == BLACK) return base + 6;
+    return 0;
+}
 
-const int bishop_table[64] = {
-   -20,-10,-10,-10,-10,-10,-10,-20,
-   -10,  5,  0,  0,  0,  0,  5,-10,
-   -10, 10, 10, 10, 10, 10, 10,-10,
-   -10,  0, 10, 10, 10, 10,  0,-10,
-   -10,  5,  5, 10, 10,  5,  5,-10,
-   -10,  0,  5, 10, 10,  5,  0,-10,
-   -10,  0,  0,  0,  0,  0,  0,-10,
-   -20,-10,-10,-10,-10,-10,-10,-20
-};
-
-const int rook_table[64] = {
-     0,  0,  0,  5,  5,  0,  0,  0,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-     5, 10, 10, 10, 10, 10, 10,  5,
-     0,  0,  0,  0,  0,  0,  0,  0
-};
-
-const int queen_table[64] = {
-   -20,-10,-10, -5, -5,-10,-10,-20,
-   -10,  0,  0,  0,  0,  0,  0,-10,
-   -10,  0,  5,  5,  5,  5,  0,-10,
-    -5,  0,  5,  5,  5,  5,  0, -5,
-     0,  0,  5,  5,  5,  5,  0, -5,
-   -10,  5,  5,  5,  5,  5,  0,-10,
-   -10,  0,  5,  0,  0,  0,  0,-10,
-   -20,-10,-10, -5, -5,-10,-10,-20
-};
-
-const int king_table[64] = {
-   -30,-40,-40,-50,-50,-40,-40,-30,
-   -30,-40,-40,-50,-50,-40,-40,-30,
-   -30,-40,-40,-50,-50,-40,-40,-30,
-   -30,-40,-40,-50,-50,-40,-40,-30,
-   -20,-30,-30,-40,-40,-30,-30,-20,
-   -10,-20,-20,-20,-20,-20,-20,-10,
-    20, 20,  0,  0,  0,  0, 20, 20,
-    20, 30, 10,  0,  0, 10, 30, 20
-};
+uint64_t zobrist_hash(const Board& board) {
+    uint64_t h = 0;
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x) {
+            int idx = piece_index(board.squares[y][x]);
+            if (idx != 0)
+                h ^= zobrist_table[y][x][idx];
+        }
+    return h;
+}
 
 int piece_value(PieceType pt) {
     switch (pt) {
@@ -79,286 +127,241 @@ int piece_value(PieceType pt) {
     case ROOK:   return 500;
     case QUEEN:  return 900;
     case KING:   return 10000;
-    default:     return 0;
+    default: return 0;
     }
 }
 
-int positional_bonus(PieceType pt, PieceColor color, int sq) {
-    int r = color == WHITE ? sq : (56 + (sq % 8) - 8 * (sq / 8));
+int positional_bonus(PieceType pt, PieceColor color, int y, int x) {
     switch (pt) {
-    case PAWN:   return pawn_table[r];
-    case KNIGHT: return knight_table[r];
-    case BISHOP: return bishop_table[r];
-    case ROOK:   return rook_table[r];
-    case QUEEN:  return queen_table[r];
-    case KING:   return king_table[r];
+    case PAWN:   return (color == WHITE) ? pawn_table[y][x] : pawn_table[7 - y][x];
+    case KNIGHT: return (color == WHITE) ? knight_table[y][x] : knight_table[7 - y][x];
+    case BISHOP: return (color == WHITE) ? bishop_table[y][x] : bishop_table[7 - y][x];
+    case ROOK:   return (color == WHITE) ? rook_table[y][x] : rook_table[7 - y][x];
+    case QUEEN:  return (color == WHITE) ? queen_table[y][x] : queen_table[7 - y][x];
+    case KING:   return (color == WHITE) ? king_table[y][x] : king_table[7 - y][x];
     default:     return 0;
     }
 }
-inline bool move_capture_first(const Board& board, const Move& m, PieceColor color) {
-    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    for (int t = 0; t < 6; ++t)
-        if (board.pieces[enemy][t] & (1ULL << m.to))
-            return true;
-    return false;
+
+// --- Null move penalty ---
+bool is_null_move(const std::vector<Move>& history, const Move& current) {
+    if (history.empty()) return false;
+    const Move& prev = history.back();
+    return (current.fromY == prev.toY && current.fromX == prev.toX &&
+        current.toY == prev.fromY && current.toX == prev.fromX &&
+        current.promoPiece == prev.promoPiece);
 }
 
-
-int evaluate_heuristics(const Board& board) {
-    // Specjalne przypadki – wygrana, przegrana, remis
-    if (board.isCheckmate(BLACK))
-        return 100000 - board.halfmoveClock;
-    if (board.isCheckmate(WHITE))
-        return -100000 + board.halfmoveClock;
-
-    if (board.isStalemate(BLACK) || board.isStalemate(WHITE) || board.halfmoveClock >= 100)
-        return -5000; // Z£O: remis jest z³y, karzemy remis (mo¿esz zmieniaæ t¹ wartoœæ)
-
-    if (board.isInsufficientMaterial())
-        return -8000; // Bardzo z³a ocena, jeszcze wiêksza kara za wyczyszczenie planszy
-
-    // Suma wartoœci materia³u, premii pozycyjnych i aktywnoœci
+// --- Uniwersalna ocena planszy ---
+int evaluate_board(const Board& board, PieceColor color, const std::vector<Move>& moveHistory, int repetitionPenalty) {
     int score = 0;
+    int pawnColWhite[8] = { 0 }, pawnColBlack[8] = { 0 };
+    int kingCenterPenaltyW = 0, kingCenterPenaltyB = 0;
+    int centerControlW = 0, centerControlB = 0;
+    int pawnAdvancementW = 0, pawnAdvancementB = 0;
 
-    int white_material = 0, black_material = 0;
-    int white_pawns = 0, black_pawns = 0;
-    int white_rooks = 0, black_rooks = 0;
-    int white_queens = 0, black_queens = 0;
-    int white_minor = 0, black_minor = 0; // skoczki+biskupy
+    for (int y = 0; y < 8; ++y) {
+        for (int x = 0; x < 8; ++x) {
+            uint8_t piece = board.squares[y][x];
+            if (piece == NONE) continue;
+            PieceType pt = getPieceType(piece);
+            PieceColor pc = getPieceColor(piece);
 
-    // Liczenie materia³u, pozycji i aktywnoœci
-    for (int color = 0; color <= 1; ++color) {
-        for (int pt = 0; pt <= 5; ++pt) {
-            Bitboard bb = board.pieces[color][pt];
-            while (bb) {
-                int sq = bit_scan_forward(bb);
-                int val = piece_value((PieceType)pt) + positional_bonus((PieceType)pt, (PieceColor)color, sq);
+            int value = piece_value(pt) + positional_bonus(pt, pc, y, x);
+            if (pc == WHITE) score += value;
+            else score -= value;
 
-                // Aktywnoœæ: figury na 3-7 ranku dostaj¹ bonus
-                int y = sq / 8;
-                if ((color == WHITE && y >= 3) || (color == BLACK && y <= 4))
-                    val += 15; // premiuj za wejœcie w po³owê przeciwnika
-
-                // premiuj mobilnoœæ hetmana, wie¿y i goñca po otwartej linii
-                if ((pt == ROOK || pt == QUEEN) && ((color == WHITE && y >= 4) || (color == BLACK && y <= 3)))
-                    val += 10;
-
-                score += (color == WHITE) ? val : -val;
-
-                // Liczenie materia³u
-                if (color == WHITE) {
-                    if (pt == PAWN) white_pawns++;
-                    if (pt == ROOK) white_rooks++;
-                    if (pt == QUEEN) white_queens++;
-                    if (pt == KNIGHT || pt == BISHOP) white_minor++;
-                    white_material += piece_value((PieceType)pt);
+            // Wie¿a na otwartej/pó³otwartej linii – bonus w ocenie
+            if (pt == ROOK) {
+                bool open = true, semiOpen = true;
+                for (int yy = 0; yy < 8; ++yy) {
+                    if (getPieceType(board.squares[yy][x]) == PAWN) {
+                        if (pc == WHITE && getPieceColor(board.squares[yy][x]) == WHITE) semiOpen = false;
+                        if (pc == BLACK && getPieceColor(board.squares[yy][x]) == BLACK) semiOpen = false;
+                        open = false;
+                    }
                 }
-                else {
-                    if (pt == PAWN) black_pawns++;
-                    if (pt == ROOK) black_rooks++;
-                    if (pt == QUEEN) black_queens++;
-                    if (pt == KNIGHT || pt == BISHOP) black_minor++;
-                    black_material += piece_value((PieceType)pt);
-                }
-                bb &= bb - 1;
+                if (pc == WHITE) score += open ? 40 : (semiOpen ? 20 : 0);
+                else score -= open ? 40 : (semiOpen ? 20 : 0);
+            }
+
+            // Pionki na kolumnach (do izolacji/duplikacji)
+            if (pt == PAWN) {
+                if (pc == WHITE) pawnColWhite[x]++;
+                else pawnColBlack[x]++;
+                if (pc == WHITE && y >= 4 && y <= 6) pawnAdvancementW++;
+                if (pc == BLACK && y >= 1 && y <= 3) pawnAdvancementB++;
+            }
+
+            // Król w centrum
+            if (pt == KING) {
+                if (pc == WHITE && ((y == 0 && (x == 4 || x == 3)))) kingCenterPenaltyW += 40;
+                if (pc == BLACK && ((y == 7 && (x == 4 || x == 3)))) kingCenterPenaltyB += 40;
+            }
+
+            // Kontrola centrum
+            if ((y == 3 || y == 4) && (x == 3 || x == 4)) {
+                if (pc == WHITE) centerControlW++;
+                else centerControlB++;
             }
         }
     }
 
-    // Kara za go³e króle – absolutny remis
-    if (white_material == 0 && black_material == 0)
-        score -= 50000;
-
-    // Endgame logic: premiuj matowanie, karz za wyczyszczenie planszy
-    // Jeœli masz hetmana/hetmana+wie¿ê a przeciwnik sam król, bonus za matowanie
-    if (white_queens >= 1 && black_material == 0 && black_pawns == 0 && black_rooks == 0 && black_minor == 0)
-        score += 20000;
-    if (black_queens >= 1 && white_material == 0 && white_pawns == 0 && white_rooks == 0 && white_minor == 0)
-        score -= 20000;
-
-    // Aktywnoœæ pionków – premiuj pionki które przesz³y po³owê planszy
-    for (int sq = 0; sq < 64; ++sq) {
-        if (board.pieces[WHITE][PAWN] & (1ULL << sq)) {
-            int y = sq / 8;
-            if (y >= 4) score += 20 * (y - 3); // im dalej tym lepiej
+    // Pionki zduplikowane/izolowane
+    for (int x = 0; x < 8; ++x) {
+        if (pawnColWhite[x] > 1) score -= 10 * (pawnColWhite[x] - 1);
+        if (pawnColBlack[x] > 1) score += 10 * (pawnColBlack[x] - 1);
+        if (pawnColWhite[x] > 0) {
+            bool isolated = true;
+            if ((x > 0 && pawnColWhite[x - 1] > 0) || (x < 7 && pawnColWhite[x + 1] > 0)) isolated = false;
+            if (isolated) score -= 20;
         }
-        if (board.pieces[BLACK][PAWN] & (1ULL << sq)) {
-            int y = sq / 8;
-            if (y <= 3) score -= 20 * (4 - y);
+        if (pawnColBlack[x] > 0) {
+            bool isolated = true;
+            if ((x > 0 && pawnColBlack[x - 1] > 0) || (x < 7 && pawnColBlack[x + 1] > 0)) isolated = false;
+            if (isolated) score += 20;
         }
     }
+    score += 15 * pawnAdvancementW;
+    score -= 15 * pawnAdvancementB;
+    score += 20 * centerControlW;
+    score -= 20 * centerControlB;
+    score -= kingCenterPenaltyW;
+    score += kingCenterPenaltyB;
 
-    // Aktywnoœæ wie¿ na otwartych liniach – bonus
-    for (int file = 0; file < 8; ++file) {
-        bool white_rook = false, black_rook = false, any_pawn = false;
-        for (int rank = 0; rank < 8; ++rank) {
-            int sq = rank * 8 + file;
-            if (board.pieces[WHITE][ROOK] & (1ULL << sq)) white_rook = true;
-            if (board.pieces[BLACK][ROOK] & (1ULL << sq)) black_rook = true;
-            if (board.pieces[WHITE][PAWN] & (1ULL << sq) || board.pieces[BLACK][PAWN] & (1ULL << sq)) any_pawn = true;
-        }
-        if (white_rook && !any_pawn) score += 30;
-        if (black_rook && !any_pawn) score -= 30;
-    }
+    // Kara za powtarzanie pozycji
+    uint64_t hash = zobrist_hash(board);
+    if (positionCounts[hash] > 1) score += (color == WHITE) ? -repetitionPenalty : repetitionPenalty;
 
-    // Premia za rozwoj: jeœli wszystkie figury wysz³y z pierwszego rzêdu – bonus
-    int white_dev = 0, black_dev = 0;
-    for (int pt = 1; pt <= 5; ++pt) {
-        Bitboard bb = board.pieces[WHITE][pt];
-        while (bb) {
-            int sq = bit_scan_forward(bb);
-            if (sq / 8 > 0) white_dev++;
-            bb &= bb - 1;
-        }
-        bb = board.pieces[BLACK][pt];
-        while (bb) {
-            int sq = bit_scan_forward(bb);
-            if (sq / 8 < 7) black_dev++;
-            bb &= bb - 1;
-        }
-    }
-    score += 5 * white_dev - 5 * black_dev;
-
-    // Kara za pasywnoœæ (figurki na linii pocz¹tkowej, nie ruszane) – im d³u¿ej, tym gorzej
-    // (mo¿esz rozwin¹æ o w³asn¹ logikê)
-
-    // Premia za bezpieczeñstwo króla (np. pionki przed królem)
-    int white_king_sq = board.findKing(WHITE), black_king_sq = board.findKing(BLACK);
-    if (white_king_sq >= 0) {
-        int file = white_king_sq % 8;
-        int rank = white_king_sq / 8;
-        // pionki przed królem
-        for (int dx = -1; dx <= 1; ++dx) {
-            int x = file + dx, y = rank + 1;
-            if (x >= 0 && x < 8 && y < 8)
-                if (board.pieces[WHITE][PAWN] & (1ULL << (y * 8 + x)))
-                    score += 8;
-        }
-    }
-    if (black_king_sq >= 0) {
-        int file = black_king_sq % 8;
-        int rank = black_king_sq / 8;
-        // pionki przed królem
-        for (int dx = -1; dx <= 1; ++dx) {
-            int x = file + dx, y = rank - 1;
-            if (x >= 0 && x < 8 && y >= 0)
-                if (board.pieces[BLACK][PAWN] & (1ULL << (y * 8 + x)))
-                    score -= 8;
-        }
-    }
-
-    // Kara za powtórzenie pozycji (tu uproszczenie – mo¿esz rozbudowaæ)
-    if (board.halfmoveClock >= 50)
-        score -= 2500;
+    // Null move penalty
+    if (!moveHistory.empty() && is_null_move(moveHistory, moveHistory.back()))
+        score += (color == WHITE) ? -100 : 100;
 
     return score;
 }
 
+// --- Szybka ocena ruchu (bicie, promocja, bonusy za szach/mat tylko raz) ---
+int quick_move_score(const Board& board, const Move& m, PieceColor color) {
+    int score = 0;
+    uint8_t target = board.squares[m.toY][m.toX];
+    if (target != NONE) {
+        PieceType ttype = getPieceType(target);
+        score += piece_value(ttype) * 100;
+        PieceType myType = getPieceType(board.squares[m.fromY][m.fromX]);
+        score -= piece_value(myType);
+    }
+    if (getPieceType(board.squares[m.fromY][m.fromX]) == PAWN &&
+        (m.toY == 0 || m.toY == 7) && m.promoPiece != 0) {
+        score += 9000;
+    }
+    return score;
+}
 
-int quiescence(Board& board, int alpha, int beta, PieceColor color) {
-    int stand_pat = evaluate_heuristics(board);
-    if (stand_pat >= beta)
-        return beta;
-    if (alpha < stand_pat)
-        alpha = stand_pat;
 
-    auto moves = board.generateAllLegalMoves(color);
-    std::vector<Move> tactical_moves;
-    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-    for (const Move& m : moves) {
-        bool isCapture = false;
-        for (int t = 0; t < 6; ++t)
-            if (board.pieces[enemy][t] & (1ULL << m.to))
-                isCapture = true;
-        if (isCapture || m.promoPiece != NONE_TYPE) {
-            tactical_moves.push_back(m);
+std::vector<ScoredMove> score_and_sort_moves(Board& board, PieceColor color, PieceColor enemy) {
+    auto moves = board.generateAllMoves(color);
+    std::vector<ScoredMove> scoredMoves;
+    for (const auto& m : moves) {
+        int score = quick_move_score(board, m, color);
+        board.makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+        if (board.isCheck(enemy)) {
+            if (board.isCheckmate(enemy))
+                score += 100000;
+            else
+                score += 700;
         }
-    }
-
-    for (const Move& m : tactical_moves) {
-        board.makeMove(m, color);
-        int score = -quiescence(board, -beta, -alpha, enemy);
         board.undoMove();
-
-        if (score >= beta)
-            return beta;
-        if (score > alpha)
-            alpha = score;
+        scoredMoves.push_back({ m, score });
     }
-    return alpha;
-}
-
-void order_moves(Board& board, std::vector<Move>& moves, PieceColor color) {
-    // Capture first
-    auto move_capture_first = [&](const Move& m) {
-        PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-        for (int t = 0; t < 6; ++t)
-            if (board.pieces[enemy][t] & (1ULL << m.to))
-                return true;
-        return false;
-        };
-    std::sort(moves.begin(), moves.end(), [&](const Move& a, const Move& b) {
-        return move_capture_first(a) > move_capture_first(b);
+    std::shuffle(scoredMoves.begin(), scoredMoves.end(), rng_engine);
+    std::sort(scoredMoves.begin(), scoredMoves.end(), [](const ScoredMove& a, const ScoredMove& b) {
+        return a.score > b.score;
         });
+    return scoredMoves;
 }
 
-int minimax(Board& board, int depth, int alpha, int beta, bool maximizingPlayer, PieceColor color) {
-    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
-
-    uint64_t key = hash_board(board);
+// --- MINIMAX Z REFAKTOREM ---
+int minimax(Board& board, int depth, int alpha, int beta, bool maximizingPlayer, PieceColor color, std::vector<Move>& moveHistory) {
+    uint64_t key = zobrist_hash(board);
+    positionCounts[key]++;
     auto it = transTable.find(key);
-    // ODCZYT: u¿ywaj TYLKO gdy wpis jest dla >= tej g³êbokoœci!
     if (it != transTable.end() && it->second.depth >= depth) {
+        positionCounts[key]--;
         return it->second.value;
     }
 
-    if (depth == 0 || board.isCheckmate(color) || board.isStalemate(color) || board.isInsufficientMaterial())
-        return quiescence(board, alpha, beta, color);
+    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
 
-    auto moves = board.generateAllLegalMoves(color);
-    order_moves(board, moves, color);
+    if (depth == 0 || board.isCheckmate(color) || board.isStalemate(color)) {
+        int val = evaluate_board(board, color, moveHistory);
+        transTable[key] = { depth, val };
+        positionCounts[key]--;
+        return val;
+    }
 
-    int bestEval = maximizingPlayer ? -1000000 : 1000000;
+    auto scoredMoves = score_and_sort_moves(board, color, enemy);
 
+    if (scoredMoves.empty()) {
+        int val = evaluate_board(board, color, moveHistory);
+        transTable[key] = { depth, val };
+        positionCounts[key]--;
+        return val;
+    }
+
+    int bestVal;
     if (maximizingPlayer) {
-        for (const Move& m : moves) {
-            board.makeMove(m, color);
-            int eval = minimax(board, depth - 1, alpha, beta, false, enemy);
+        bestVal = -1000000;
+        for (const auto& sm : scoredMoves) {
+            const Move& m = sm.move;
+            board.makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+            moveHistory.push_back(m);
+            int eval = minimax(board, depth - 1, alpha, beta, false, enemy, moveHistory);
+            moveHistory.pop_back();
             board.undoMove();
-            bestEval = std::max(bestEval, eval);
+            bestVal = std::max(bestVal, eval);
             alpha = std::max(alpha, eval);
-            if (beta <= alpha) break;
+            if (beta <= alpha)
+                break;
         }
     }
     else {
-        for (const Move& m : moves) {
-            board.makeMove(m, color);
-            int eval = minimax(board, depth - 1, alpha, beta, true, enemy);
+        bestVal = 1000000;
+        for (const auto& sm : scoredMoves) {
+            const Move& m = sm.move;
+            board.makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+            moveHistory.push_back(m);
+            int eval = minimax(board, depth - 1, alpha, beta, true, enemy, moveHistory);
+            moveHistory.pop_back();
             board.undoMove();
-            bestEval = std::min(bestEval, eval);
+            bestVal = std::min(bestVal, eval);
             beta = std::min(beta, eval);
-            if (beta <= alpha) break;
+            if (beta <= alpha)
+                break;
         }
     }
-
-    // ZAPIS: nadpisuj TYLKO jeœli nie by³o wpisu lub obecny jest dla mniejszej g³êbokoœci
-    if (it == transTable.end() || it->second.depth < depth) {
-        transTable[key] = { depth, bestEval };
-    }
-    return bestEval;
+    transTable[key] = { depth, bestVal };
+    positionCounts[key]--;
+    return bestVal;
 }
 
-
+// --- NAJLEPSZY RUCH AI ---
 Move get_best_move_AI(Board& board, int depth, PieceColor color) {
-    auto moves = board.generateAllLegalMoves(color);
-    order_moves(board, moves, color);
+    positionCounts.clear();
+    PieceColor enemy = (color == WHITE) ? BLACK : WHITE;
+    auto scoredMoves = score_and_sort_moves(board, color, enemy);
 
     Move bestMove;
     int bestEval = (color == WHITE) ? -1000000 : 1000000;
-    for (const Move& m : moves) {
-        board.makeMove(m, color);
-        int eval = minimax(board, depth - 1, -1000000, 1000000, color == BLACK, (color == WHITE) ? BLACK : WHITE);
+    std::vector<Move> moveHistory;
+
+    for (const auto& sm : scoredMoves) {
+        const Move& m = sm.move;
+        board.makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+        moveHistory.push_back(m);
+        int eval = minimax(board, depth - 1, -1000000, 1000000, color == BLACK, enemy, moveHistory);
+        moveHistory.pop_back();
         board.undoMove();
+
         if (color == WHITE) {
             if (eval > bestEval) {
                 bestEval = eval;
@@ -374,4 +377,3 @@ Move get_best_move_AI(Board& board, int depth, PieceColor color) {
     }
     return bestMove;
 }
-

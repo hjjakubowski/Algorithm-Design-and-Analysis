@@ -1,44 +1,35 @@
 #pragma once
-#include <intrin.h>
 #include <cstdint>
-#include <random>
+#include <string>
 
 enum PieceType : uint8_t {
-    PAWN = 0,
-    KNIGHT = 1,
-    BISHOP = 2,
-    ROOK = 3,
-    QUEEN = 4,
-    KING = 5,
-    NONE_TYPE = 6
+    NONE = 0b00000000,
+    PAWN = 0b00000100,
+    ROOK = 0b00001100,
+    KNIGHT = 0b00011100,
+    BISHOP = 0b00111100,
+    QUEEN = 0b01111100,
+    KING = 0b11111100,
 };
 
 enum PieceColor : uint8_t {
-    WHITE = 0,
-    BLACK = 1,
-    NO_COLOR = 2
+    EMPTY = 0b00,
+    WHITE = 0b10,
+    BLACK = 0b01
 };
 
-// Bitboard helpers
-using Bitboard = uint64_t;
-
-inline int sq(int y, int x) { return y * 8 + x; } // indeks pola na 0..63
-inline int rank_of(int sq) { return sq / 8; }
-inline int file_of(int sq) { return sq % 8; }
-
-// Zamiana (PieceType, PieceColor) na znak:
-inline char pieceToChar(PieceType pt, PieceColor color) {
-    static const char chars[2][6] = {
-        {'P', 'N', 'B', 'R', 'Q', 'K'}, // White
-        {'p', 'n', 'b', 'r', 'q', 'k'}  // Black
-    };
-    if (pt > KING || color > BLACK) return '.';
-    return chars[color][pt];
+// Sklejenie typu i koloru w jeden bajt:
+inline uint8_t makePiece(PieceType type, PieceColor color) {
+    return (type | color);
 }
 
-inline int bit_scan_forward(Bitboard b) {
-    unsigned long idx;
-    _BitScanForward64(&idx, b);
-    return static_cast<int>(idx);
+inline PieceType getPieceType(uint8_t piece) {
+    return static_cast<PieceType>(piece & 0b11111100);
 }
 
+inline PieceColor getPieceColor(uint8_t piece) {
+    return static_cast<PieceColor>(piece & 0b11);
+}
+
+// Zamiana na znak (np. do FEN, do wyswietlania)
+char pieceToChar(uint8_t piece);

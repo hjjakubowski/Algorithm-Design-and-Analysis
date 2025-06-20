@@ -1,17 +1,14 @@
 #pragma once
 #include <string>
-#include "piece.hpp"
 
-// Ruch: from/to na bitboardzie to indeks 0..63
 struct Move {
-    int from; // 0..63
-    int to;   // 0..63
-    PieceType promoPiece; // do promocji pionka
+    int fromY, fromX, toY, toX;
+    uint8_t promoPiece;
 
-    Move() : from(0), to(0), promoPiece(NONE_TYPE) {}
-    Move(int f, int t, PieceType promo = NONE_TYPE)
-        : from(f), to(t), promoPiece(promo) {
+    Move() : fromY(0), fromX(0), toY(0), toX(0), promoPiece(0) {}
+    Move(int fy, int fx, int ty, int tx, uint8_t promo = 0)
+        : fromY(fy), fromX(fx), toY(ty), toX(tx), promoPiece(promo) {
     }
 
-    static Move fromString(const std::string& str); // np. "e2e4", "a7a8q"
+    static Move fromString(const std::string& str);
 };
