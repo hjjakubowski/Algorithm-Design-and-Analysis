@@ -5,11 +5,11 @@
 #include <vector>
 #include <unordered_map>
 
-struct TTEntry {
+struct TransTableEntry {
     int depth;
     int value;
 };
-static std::unordered_map<uint64_t, TTEntry> transTable;
+extern std::unordered_map<uint64_t, TransTableEntry> transTable;
 
 extern const int pawn_table[64];
 extern const int knight_table[64];

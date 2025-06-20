@@ -17,6 +17,7 @@ struct Board {
         Bitboard all;
         Move move;
         int halfmoveClock;
+
     };
     std::vector<HistoryEntry> history;
 
@@ -34,6 +35,6 @@ struct Board {
     bool isSquareAttacked(int sq, PieceColor byColor) const;
 
     std::vector<Move> generateAllLegalMoves(PieceColor color) const;
-
+    bool isInsufficientMaterial() const;
     int findKing(PieceColor color) const;
 };

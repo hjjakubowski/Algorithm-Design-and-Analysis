@@ -11,6 +11,7 @@ void Board::setInitial() {
     memset(occupied, 0, sizeof(occupied));
     all = 0;
     halfmoveClock = 0;
+ 
 
 
     pieces[WHITE][ROOK] |= (1ULL << sq(0, 0)) | (1ULL << sq(0, 7));
@@ -288,6 +289,8 @@ bool Board::makeMove(const Move& m, PieceColor color) {
     h.all = all;
     h.move = m;
     h.halfmoveClock = halfmoveClock;
+
+
     history.push_back(h);
 
     bool isPawnMove = (pieces[color][PAWN] & (1ULL << m.from));
@@ -342,6 +345,8 @@ void Board::undoMove() {
     all = h.all;
     halfmoveClock = h.halfmoveClock; 
     history.pop_back();
+
+
 }
 
 bool Board::isLegalMove(const Move& m, PieceColor color) const {
@@ -424,6 +429,51 @@ bool Board::isSquareAttacked(int sq, PieceColor byColor) const {
     if (king) {
         int from = bit_scan_forward(king);
         if (king_attacks[from] & (1ULL << sq)) return true;
+    }
+
+    return false;
+}
+
+
+bool Board::isInsufficientMaterial() const {
+ 
+    int white_pieces = 0, black_pieces = 0;
+    int white_bishops = 0, white_knights = 0;
+    int black_bishops = 0, black_knights = 0;
+
+    for (int sq = 0; sq < 64; ++sq) {
+        for (int color = 0; color < 2; ++color) {
+            for (int pt = 0; pt < 6; ++pt) {
+                if (pt == KING) continue;
+                if (pieces[color][pt] & (1ULL << sq)) {
+                    if (color == WHITE) white_pieces++;
+                    else black_pieces++;
+                    if (pt == BISHOP) {
+                        if (color == WHITE) white_bishops++;
+                        else black_bishops++;
+                    }
+                    if (pt == KNIGHT) {
+                        if (color == WHITE) white_knights++;
+                        else black_knights++;
+                    }
+                }
+            }
+        }
+    }
+
+   
+    if (white_pieces == 0 && black_pieces == 0) return true;
+
+    if ((white_pieces == 1 && white_knights == 1 && black_pieces == 0) ||
+        (black_pieces == 1 && black_knights == 1 && white_pieces == 0)) return true;
+
+    if ((white_pieces == 1 && white_bishops == 1 && black_pieces == 0) ||
+        (black_pieces == 1 && black_bishops == 1 && white_pieces == 0)) return true;
+
+    if (white_pieces == 1 && white_bishops == 1 &&
+        black_pieces == 1 && black_bishops == 1) {
+
+        return true;
     }
 
     return false;

@@ -13,10 +13,10 @@ enum AiStrength { NEWBIE = 1, CLUB = 2, GRANDMASTER = 3 };
 
 int get_ai_depth(AiStrength level) {
     switch (level) {
-    case NEWBIE: return 6;
+    case NEWBIE: return 2;
     case CLUB:   return 8;
     case GRANDMASTER: return 16;
-    default:     return 6;
+    default:     return 2;
     }
 }
 
@@ -52,6 +52,7 @@ int main() {
     init_king_attacks();
     //test_chess_engine();
     init_zobrist();
+    transTable.clear();
 
     std::cout << "Wybierz tryb gry:\n";
     std::cout << "1. Czlowiek vs Czlowiek\n";
@@ -89,6 +90,16 @@ int main() {
     board.print();
 
     while (true) {
+        if (board.isInsufficientMaterial()) {
+			std::cout << "Remis! Brak mozliwosci zamatowania przeciwnika.\n";
+			break;
+        }
+        if (board.halfmoveClock >= 100) {
+            std::cout << "Remis! (50 ruchow bez bicia)\n";
+            board.print();
+            break;
+        }
+
         if (board.isCheckmate(turn)) {
             std::cout << "Mat! " << (turn == WHITE ? "Czarne" : "Biale") << " wygrywaja.\n";
             break;
@@ -114,11 +125,7 @@ int main() {
             print_move(aiMove);
             std::cout << std::endl;
             board.makeMove(aiMove, turn);
-            if (board.halfmoveClock >= 100) {
-                std::cout << "Remis! (50 ruchow bez bicia)\n";
-                board.print();
-                break;
-            }
+            
             turn = (turn == WHITE) ? BLACK : WHITE;
             board.print();
             continue;
