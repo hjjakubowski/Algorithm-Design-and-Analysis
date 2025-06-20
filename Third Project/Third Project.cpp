@@ -10,10 +10,10 @@ enum AiStrength { NEWBIE = 1, CLUB = 2, GRANDMASTER = 3 };
 
 int get_ai_depth(AiStrength level) {
     switch (level) {
-    case NEWBIE: return 4;
-    case CLUB:   return 5;
+    case NEWBIE: return 2;
+    case CLUB:   return 4;
     case GRANDMASTER: return 6;
-    default:     return 4;
+    default:     return 2;
     }
 }
 
@@ -112,10 +112,21 @@ int main() {
 
         if (input == "undo") {
             board.undoMove();
-            turn = (turn == WHITE) ? BLACK : WHITE;
+            if (mode_choice == HUMAN_VS_AI && !board.history.empty()) {
+                board.undoMove();
+            }
+            
+            if (mode_choice == HUMAN_VS_AI) {
+                turn = WHITE; 
+            }
+            else {
+                turn = (turn == WHITE) ? BLACK : WHITE; 
+            }
             board.print();
             continue;
         }
+
+
         if (input == "quit") {
             std::cout << "Koniec gry.\n";
             break;
@@ -146,23 +157,24 @@ int main() {
             continue;
         }
 
+      
         if (!board.isLegalMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece)) {
             std::cout << "Nielegalny ruch!\n";
             continue;
         }
 
-        board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
+        if (!board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece)) {
+            std::cout << "Błąd wykonania ruchu!\n";
+            continue;
+        }
         if (board.isCheck(turn)) {
             std::cout << "Nie mozna zostawic swojego krola pod szachem!\n";
             board.undoMove();
             continue;
         }
-        board.undoMove();
-
-
-        board.makeMove(move.fromY, move.fromX, move.toY, move.toX, move.promoPiece);
         turn = (turn == WHITE) ? BLACK : WHITE;
         board.print();
+
     }
 
     return 0;
