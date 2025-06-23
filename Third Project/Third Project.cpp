@@ -100,6 +100,14 @@ int main() {
                 << (aiMove.promoPiece == QUEEN ? "h" : aiMove.promoPiece == ROOK ? "w" : aiMove.promoPiece == KNIGHT ? "g" : aiMove.promoPiece == BISHOP ? "s" : "")
                 << std::endl;
             board.makeMove(aiMove.fromY, aiMove.fromX, aiMove.toY, aiMove.toX, aiMove.promoPiece);
+            if (!board.hasKing(WHITE)) {
+                std::cout << "Biale straciły króla! Czarne wygrywają.\n";
+                break;
+            }
+            if (!board.hasKing(BLACK)) { 
+                std::cout << "Czarne straciły króla! Biale wygrywają.\n";
+                break;
+            }
             turn = (turn == WHITE) ? BLACK : WHITE;
             board.print();
             continue;

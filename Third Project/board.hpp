@@ -41,6 +41,9 @@ public:
     std::vector<Move> generateAllMoves(PieceColor color) const;
     std::pair<int, int> findKing(PieceColor color) const;
 
+    std::vector<Move> generateAllLegalMoves(PieceColor color) const;
+    bool hasKing(PieceColor color) const;
+
     bool isDrawBy50MoveRule() const;
     bool isInsufficientMaterial() const;
 };

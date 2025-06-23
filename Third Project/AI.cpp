@@ -143,7 +143,6 @@ int positional_bonus(PieceType pt, PieceColor color, int y, int x) {
     }
 }
 
-// --- Null move penalty ---
 bool is_null_move(const std::vector<Move>& history, const Move& current) {
     if (history.empty()) return false;
     const Move& prev = history.back();
@@ -152,7 +151,6 @@ bool is_null_move(const std::vector<Move>& history, const Move& current) {
         current.promoPiece == prev.promoPiece);
 }
 
-// --- Uniwersalna ocena planszy ---
 int evaluate_board(const Board& board, PieceColor color, const std::vector<Move>& moveHistory, int repetitionPenalty) {
     int score = 0;
     int pawnColWhite[8] = { 0 }, pawnColBlack[8] = { 0 };
@@ -171,7 +169,7 @@ int evaluate_board(const Board& board, PieceColor color, const std::vector<Move>
             if (pc == WHITE) score += value;
             else score -= value;
 
-            // Wie¿a na otwartej/pó³otwartej linii – bonus w ocenie
+            // Wie¿a na otwartej/pó³otwartej linii 
             if (pt == ROOK) {
                 bool open = true, semiOpen = true;
                 for (int yy = 0; yy < 8; ++yy) {
@@ -240,7 +238,7 @@ int evaluate_board(const Board& board, PieceColor color, const std::vector<Move>
     return score;
 }
 
-// --- Szybka ocena ruchu (bicie, promocja, bonusy za szach/mat tylko raz) ---
+
 int quick_move_score(const Board& board, const Move& m, PieceColor color) {
     int score = 0;
     uint8_t target = board.squares[m.toY][m.toX];
@@ -259,7 +257,7 @@ int quick_move_score(const Board& board, const Move& m, PieceColor color) {
 
 
 std::vector<ScoredMove> score_and_sort_moves(Board& board, PieceColor color, PieceColor enemy) {
-    auto moves = board.generateAllMoves(color);
+    auto moves = board.generateAllLegalMoves(color);
     std::vector<ScoredMove> scoredMoves;
     for (const auto& m : moves) {
         int score = quick_move_score(board, m, color);
@@ -280,7 +278,7 @@ std::vector<ScoredMove> score_and_sort_moves(Board& board, PieceColor color, Pie
     return scoredMoves;
 }
 
-// --- MINIMAX Z REFAKTOREM ---
+
 int minimax(Board& board, int depth, int alpha, int beta, bool maximizingPlayer, PieceColor color, std::vector<Move>& moveHistory) {
     uint64_t key = zobrist_hash(board);
     positionCounts[key]++;
@@ -344,7 +342,7 @@ int minimax(Board& board, int depth, int alpha, int beta, bool maximizingPlayer,
     return bestVal;
 }
 
-// --- NAJLEPSZY RUCH AI ---
+
 Move get_best_move_AI(Board& board, int depth, PieceColor color) {
     positionCounts.clear();
     PieceColor enemy = (color == WHITE) ? BLACK : WHITE;

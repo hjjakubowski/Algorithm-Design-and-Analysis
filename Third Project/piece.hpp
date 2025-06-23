@@ -18,7 +18,7 @@ enum PieceColor : uint8_t {
     BLACK = 0b01
 };
 
-// Sklejenie typu i koloru w jeden bajt:
+
 inline uint8_t makePiece(PieceType type, PieceColor color) {
     return (type | color);
 }
@@ -31,5 +31,4 @@ inline PieceColor getPieceColor(uint8_t piece) {
     return static_cast<PieceColor>(piece & 0b11);
 }
 
-// Zamiana na znak (np. do FEN, do wyswietlania)
 char pieceToChar(uint8_t piece);

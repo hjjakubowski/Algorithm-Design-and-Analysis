@@ -59,7 +59,7 @@ bool Board::makeMove(int fromY, int fromX, int toY, int toX, uint8_t promo) {
     uint8_t captured = squares[toY][toX];
     history.push_back({ squares, Move(fromY, fromX, toY, toX, promo), halfmoveClock });
 
-    // Regu³a 50 ruchów: jeœli ruch pionkiem lub bicie, resetuj licznik, w przeciwnym razie inkrementuj
+    // Regu³a 50 ruchów: jeœli ruch pionkiem lub bicie, resetuj licznik
     if (getPieceType(piece) == PAWN || captured != NONE) {
         halfmoveClock = 0;
     }
@@ -125,8 +125,6 @@ bool Board::isStalemate(PieceColor color) const {
     return true;
 }
 
-// --- Nowe regu³y remisu ---
-
 bool Board::isDrawBy50MoveRule() const {
     return halfmoveClock >= 100;
 }
@@ -161,8 +159,6 @@ bool Board::isInsufficientMaterial() const {
         return true;
     return false;
 }
-
-// --- Generowanie ruchów ---
 
 std::vector<Move> Board::legalPawnMoves(int y, int x) const {
     std::vector<Move> moves;
@@ -322,3 +318,24 @@ std::vector<Move> Board::generateAllMoves(PieceColor color) const {
             }
     return moves;
 }
+
+std::vector<Move> Board::generateAllLegalMoves(PieceColor color) const {
+    std::vector<Move> moves, legalMoves;
+    auto allMoves = generateAllMoves(color);
+    for (const auto& m : allMoves) {
+        Board tmp = *this;
+        tmp.makeMove(m.fromY, m.fromX, m.toY, m.toX, m.promoPiece);
+        if (!tmp.isCheck(color))
+            legalMoves.push_back(m);
+    }
+    return legalMoves;
+}
+
+bool Board::hasKing(PieceColor color) const {
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+            if (getPieceType(squares[y][x]) == KING && getPieceColor(squares[y][x]) == color)
+                return true;
+    return false;
+}
+
